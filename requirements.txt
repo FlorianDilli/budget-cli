@@ -1,0 +1,4 @@
+rich
+simple-term-menu
+pycryptodome
+toml

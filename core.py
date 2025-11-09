@@ -1,0 +1,494 @@
+import os
+import toml
+import shutil
+from datetime import datetime
+from decimal import Decimal
+from typing import Dict, Any, List, Tuple
+
+from database import DatabaseManager
+from crypto import derive_key, encrypt, decrypt, generate_salt
+
+class BudgetEngine:
+    """Manages the application's core logic, state, and business rules."""
+
+    def __init__(self, db_path: str, password: str, config_path: str = "config.toml"):
+        """
+        Initializes the core engine.
+
+        Args:
+            db_path: Path to the SQLite database file.
+            password: The user's master password.
+            config_path: Path to the configuration file.
+        """
+        self.db_path = db_path
+        self.password = password
+        self.config_path = config_path
+        
+        self.db = DatabaseManager(self.db_path)
+        self._encryption_key = None
+        self.config = self._load_config()
+
+        self._connect_to_db()
+        self._verify_password()
+
+    def _load_config(self) -> Dict[str, Any]:
+        """Loads the user's configuration from a TOML file."""
+        if not os.path.exists(self.config_path):
+            # If config.toml doesn't exist, copy it from the example file.
+            example_path = "config.example.toml"
+            if not os.path.exists(example_path):
+                # This is a fallback in case the example file is missing.
+                # Creates a minimal, functional config.
+                default_config = {
+                    "user": {"currency_symbol": "USD"},
+                    "theme": {
+                        "accent_color": "#00FFFF", "positive": "#00FF00",
+                        "negative": "#FF0000", "main_color": "#00FFFF",
+                        "recurring_transaction_highlight": "#E2B59A"
+                    },
+                    "importer": {
+                        "date_column": "Date", "description_column": "Description",
+                        "amount_column": "Amount"
+                    },
+                    "category_rules": {},
+                    "recurring_transactions": []
+                }
+                with open(self.config_path, "w") as f:
+                    toml.dump(default_config, f)
+            else:
+                shutil.copy(example_path, self.config_path)
+        
+        config = toml.load(self.config_path)
+        # Ensure theme settings exist, providing defaults if they don't
+        if "theme" not in config:
+            config["theme"] = {
+                "accent_color": "#00FFFF",
+                "positive": "#00FF00",
+                "negative": "#FF0000",
+                "main_color": "#00FFFF"
+            }
+        return config
+
+    def _connect_to_db(self) -> None:
+        """Derives the DB key and connects to the database."""
+        # Use a fixed salt for the database key for simplicity.
+        # A more complex system might store a user-specific salt.
+        db_salt = b'__a_fixed_salt__'
+        db_key = derive_key(self.password, db_salt).hex()
+        self.db.connect(db_key)
+
+        # Derive and store a separate key for field-level encryption
+        encryption_salt = self._get_or_create_encryption_salt()
+        self._encryption_key = derive_key(self.password, encryption_salt)
+
+    def _get_or_create_encryption_salt(self) -> bytes:
+        """
+        Retrieves the encryption salt or creates a new one.
+        If a new salt is created, it also clears the old password verifier.
+        """
+        salt = self.db.get_meta('encryption_salt')
+        if salt:
+            return bytes.fromhex(salt)
+        
+        # If no salt exists, it's a fresh setup or a reset.
+        # Ensure the old password verifier is gone.
+        self.db.delete_meta('password_verifier')
+        
+        new_salt = generate_salt()
+        self.db.set_meta('encryption_salt', new_salt.hex())
+        return new_salt
+
+    def _verify_password(self) -> None:
+        """Verifies the master password by checking a stored verifier."""
+        verifier = self.db.get_meta('password_verifier')
+        
+        # If no verifier exists, this is a fresh setup.
+        # Create a new verifier and store it.
+        if not verifier:
+            plaintext_verifier = b'master_password_check'
+            encrypted_verifier = encrypt(plaintext_verifier, self._encryption_key)
+            self.db.set_meta('password_verifier', encrypted_verifier.hex())
+            return
+
+        try:
+            # Attempt to decrypt the verifier with the derived key
+            decrypted_verifier = decrypt(bytes.fromhex(verifier), self._encryption_key)
+            if decrypted_verifier != b'master_password_check':
+                raise ValueError("Password verification failed.")
+        except Exception:
+            # This will catch decryption errors or failed checks
+            raise RuntimeError("Incorrect password.")
+    def _get_recurring_transactions(self) -> List[Dict[str, Any]]:
+        """
+        Parses the recurring transactions from the config file.
+
+        Returns:
+            A list of recurring transaction dictionaries.
+        """
+        transactions = self.config.get('recurring_transactions', [])
+        
+        # Basic validation to ensure "amount" is a number
+        for t in transactions:
+            if not isinstance(t.get('amount'), (int, float)):
+                raise ValueError(f"Invalid amount for recurring transaction: {t.get('description')}")
+            if not isinstance(t.get('recurrence_months'), int) or t.get('recurrence_months', 0) <= 0:
+                raise ValueError(f"Invalid recurrence for transaction: {t.get('description')}")
+
+        return transactions
+
+    def _get_normalized_budget(self) -> Decimal:
+        """
+        Calculates a normalized monthly budget from recurring transactions.
+        """
+        total_monthly_flow = Decimal('0')
+        
+        recurring_transactions = self._get_recurring_transactions()
+        
+        for t in recurring_transactions:
+            amount = Decimal(t['amount'])
+            recurrence_months = t.get('recurrence_months', 1)
+            
+            if recurrence_months > 0:
+                total_monthly_flow += amount / recurrence_months
+        
+        return total_monthly_flow
+
+
+
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """
+        Calculates and returns the main dashboard metrics for the most recent month with transactions.
+        If no transactions exist, it defaults to the current month.
+        """
+        normalized_monthly_flow = self._get_normalized_budget()
+
+        # Determine the most recent month with transactions
+        available_months = self.get_available_months()
+        today = datetime.now()
+
+        if available_months:
+            latest_year, latest_month = available_months[0]
+            start_of_month = datetime(int(latest_year), int(latest_month), 1)
+            # Use the actual today's date for the end date if it's the current month,
+            # otherwise, use the end of that month.
+            if int(latest_year) == today.year and int(latest_month) == today.month:
+                end_of_period = today
+            else:
+                import calendar
+                _, last_day = calendar.monthrange(int(latest_year), int(latest_month))
+                end_of_period = datetime(int(latest_year), int(latest_month), last_day)
+            
+            latest_month_str = start_of_month.strftime('%B %Y')
+        else:
+            # Default to the current month if no transactions are available
+            latest_year, latest_month = str(today.year), str(today.month).zfill(2)
+            end_of_period = today
+            latest_month_str = today.strftime('%B %Y')
+
+        # Fetch transactions for the determined period
+        transactions_for_period = self.db.get_transactions(year=latest_year, month=latest_month)
+        decrypted_transactions = self._decrypt_transactions(transactions_for_period)
+        
+        # Get the descriptions of recurring transactions
+        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
+
+        monthly_expenses = Decimal('0')
+        for t in decrypted_transactions:
+            is_recurring = t['description'].lower() in recurring_transactions_map
+            if not is_recurring:
+                monthly_expenses += t['amount']
+            else:
+                # It's a recurring transaction, check for amount deviation
+                rec_trans_config = recurring_transactions_map[t['description'].lower()]
+                if rec_trans_config.get('recurrence_months') == 1:
+                    defined_amount = Decimal(rec_trans_config['amount'])
+                    actual_amount = t['amount']
+                    difference = actual_amount - defined_amount
+                    
+                    if difference != 0:
+                        monthly_expenses += difference
+        
+        available_to_spend = normalized_monthly_flow + monthly_expenses
+
+        return {
+            "allowed_monthly_spend": normalized_monthly_flow,
+            "monthly_expenses": monthly_expenses,
+            "available_to_spend": available_to_spend,
+            "currency": self.config['user']['currency_symbol'],
+            "latest_month": latest_month_str
+        }
+
+    def get_monthly_summary(self, year: str, month: str) -> Dict[str, Any]:
+        """
+        Calculates and returns the main dashboard metrics for a specific month.
+        """
+        normalized_monthly_flow = self._get_normalized_budget()
+
+        # Fetch transactions for the specified month
+        transactions_for_period = self.db.get_transactions(year=year, month=month)
+        decrypted_transactions = self._decrypt_transactions(transactions_for_period)
+        
+        # Get the descriptions of recurring transactions
+        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
+        
+        monthly_expenses = Decimal('0')
+        for t in decrypted_transactions:
+            is_recurring = t['description'].lower() in recurring_transactions_map
+            
+            if not is_recurring:
+                monthly_expenses += t['amount']
+            else:
+                # It's a recurring transaction, check for amount deviation
+                rec_trans_config = recurring_transactions_map[t['description'].lower()]
+                if rec_trans_config.get('recurrence_months') == 1:
+                    defined_amount = Decimal(rec_trans_config['amount'])
+                    actual_amount = t['amount']
+                    difference = actual_amount - defined_amount
+                    
+                    if difference != 0:
+                        monthly_expenses += difference
+        
+        available_to_spend = normalized_monthly_flow + monthly_expenses
+
+        return {
+            "allowed_monthly_spend": normalized_monthly_flow,
+            "monthly_expenses": monthly_expenses,
+            "available_to_spend": available_to_spend,
+            "currency": self.config['user']['currency_symbol']
+        }
+    def _get_category_from_rules(self, description: str) -> str:
+        """Assigns a category based on keywords in the description."""
+        # Ensure 'category_rules' exists in the config, default to empty dict
+        rules = self.config.get('category_rules', {})
+        
+        # Make the search case-insensitive
+        lower_desc = description.lower()
+        
+        for category, keywords in rules.items():
+            # Ensure keywords is a list to avoid errors with invalid config
+            if isinstance(keywords, list):
+                for keyword in keywords:
+                    # More robust substring check, still case-insensitive
+                    if keyword.lower() in lower_desc.lower():
+                        return category
+        
+        # Default category if no rules match
+        return "Uncategorized"
+
+    def add_expense(self, date: str, description: str, amount: float, category: str):
+        """
+        Adds a new manual expense to the database.
+        Encrypts the description before storing.
+        """
+        import hashlib
+
+        # Encrypt the description
+        encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
+        encrypted_amount = encrypt(str(amount).encode('utf-8'), self._encryption_key)
+        encrypted_category = encrypt(category.encode('utf-8'), self._encryption_key)
+
+        # Create a unique hash to prevent duplicates
+        unique_string = f"{date}-{description}-{amount}"
+        unique_hash = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
+
+        # Check for duplicates before inserting
+        existing = self.db.fetch_all("SELECT 1 FROM transactions WHERE unique_hash = ?", (unique_hash,))
+        if existing:
+            raise ValueError("This transaction appears to be a duplicate.")
+
+        self.db.execute_query(
+            """
+            INSERT INTO transactions (transaction_date, description, amount, category, unique_hash)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash)
+        )
+
+    def get_recent_transactions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieves and decrypts the most recent transactions."""
+        transactions = self.db.get_transactions(limit=limit)
+        return self._decrypt_transactions(transactions)
+
+    def get_top_spending_for_current_month(self, year: str = None, month: str = None, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Calculates and returns a top view of spending for a given month, or the current month if not specified.
+        """
+        if not year or not month:
+            today = datetime.now()
+            year = str(today.year)
+            month = str(today.month).zfill(2)
+        
+        transactions = self.db.get_transactions(year=year, month=month)
+        decrypted_transactions = self._decrypt_transactions(transactions)
+        return self._calculate_top_spending(decrypted_transactions, limit)
+
+    def get_top_spending_for_month(self, year: str, month: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Calculates and returns a top 10 view of spending for a specific month.
+        """
+        transactions = self.db.get_transactions(year=year, month=month)
+        decrypted_transactions = self._decrypt_transactions(transactions)
+        return self._calculate_top_spending(decrypted_transactions, limit)
+
+    def _calculate_top_spending(self, transactions: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+        """
+        Helper function to calculate top spending from a list of transactions.
+        
+        Args:
+            transactions: A list of decrypted transaction dictionaries.
+            limit: The number of items to return.
+
+        Returns:
+            A list of dictionaries, sorted by the absolute amount.
+        """
+        uncategorized = []
+        categorized = {}
+
+        for t in transactions:
+            amount = t['amount']
+            
+            if t['category'] == "Uncategorized":
+                uncategorized.append({
+                    "name": t['description'],
+                    "amount": amount,
+                    "type": "Transaction",
+                    "is_recurring": t.get('is_recurring', False)
+                })
+            else:
+                category_name = t['category']
+                if category_name not in categorized:
+                    categorized[category_name] = Decimal('0')
+                categorized[category_name] += t['amount']
+        
+        category_totals = [
+            {"name": cat, "amount": total, "type": "Category"}
+            for cat, total in categorized.items()
+        ]
+
+        combined_view = uncategorized + category_totals
+        combined_view.sort(key=lambda x: abs(x['amount']), reverse=True)
+        
+        return combined_view[:limit]
+
+    def get_transactions_for_month(self, year: str, month: str) -> List[Dict[str, Any]]:
+        """Retrieves and decrypts all transactions for a given month."""
+        transactions = self.db.get_transactions(year=year, month=month)
+        return self._decrypt_transactions(transactions)
+
+    def get_available_months(self) -> List[Tuple[str, str]]:
+        """Returns a list of year-month pairs that have transactions."""
+        return self.db.get_available_months()
+
+    def delete_month_data(self, year: str, month: str) -> int:
+        """Deletes all transaction data for a specific month."""
+        return self.db.delete_transactions_for_month(year, month)
+
+    def full_reset(self) -> None:
+        """
+        Performs a full reset of the application.
+        Deletes all transactions and resets the encryption salt.
+        """
+        # This is the most critical step: the database file must be deleted.
+        if os.path.exists(self.db_path):
+            self.db.close() # Ensure the connection is closed before deleting
+            os.remove(self.db_path)
+            
+        # Also delete the config file so it gets recreated from the template on next run
+        if os.path.exists(self.config_path):
+            os.remove(self.config_path)
+
+    def _reset_state_and_reconnect(self) -> None:
+        from datetime import datetime
+        """Resets the in-memory state and re-initializes the DB."""
+        self._encryption_key = None
+        self.config = self._load_config()
+        
+        # Re-derive keys and reconnect to the DB
+        self._connect_to_db()
+        self._verify_password()
+
+    def _decrypt_transactions(self, transactions: List[Any]) -> List[Dict[str, Any]]:
+        """Helper to decrypt a list of transaction rows."""
+        decrypted_list = []
+        recurring_descriptions = {t['description'].lower() for t in self._get_recurring_transactions()}
+
+        for t in transactions:
+            try:
+                # Decrypt all sensitive fields
+                desc_bytes = bytes.fromhex(t['description'])
+                amount_bytes = bytes.fromhex(t['amount'])
+                category_bytes = bytes.fromhex(t['category'])
+
+                decrypted_desc = decrypt(desc_bytes, self._encryption_key).decode('utf-8')
+                decrypted_amount = Decimal(decrypt(amount_bytes, self._encryption_key).decode('utf-8'))
+                decrypted_category = decrypt(category_bytes, self._encryption_key).decode('utf-8')
+
+                # Check if the transaction is in the recurring list
+                is_recurring = any(rec_desc in decrypted_desc.lower() for rec_desc in recurring_descriptions)
+                
+                decrypted_list.append({
+                    "date": t['transaction_date'],
+                    "description": decrypted_desc,
+                    "amount": decrypted_amount,
+                    "category": decrypted_category,
+                    "is_recurring": is_recurring
+                })
+            except Exception:
+                # If decryption fails, show placeholders for all encrypted fields
+                decrypted_list.append({
+                    "date": t['transaction_date'],
+                    "description": "[DECRYPTION FAILED]",
+                    "amount": Decimal("0"),
+                    "category": "[REDACTED]",
+                    "is_recurring": False
+                })
+        return decrypted_list
+
+    def reload_config_and_reapply_all(self) -> int:
+        """
+        Reloads the config file and re-applies all rules and categorizations.
+        
+        Returns:
+            The number of transactions that were updated.
+        """
+        # Step 1: Reload the configuration
+        self.config = self._load_config()
+        
+        # Step 2: Re-apply categorization rules
+        return self.recategorize_transactions()
+
+    def recategorize_transactions(self) -> int:
+        """
+        Re-applies categorization rules to all existing transactions.
+        
+        Returns:
+            The number of transactions that were updated.
+        """
+        updated_count = 0
+        all_transactions = self.db.get_transactions() # Gets all transactions
+
+        for t in all_transactions:
+            try:
+                # Decrypt the description to apply rules
+                decrypted_desc = decrypt(bytes.fromhex(t['description']), self._encryption_key).decode('utf-8')
+                
+                # Decrypt the old category to see if it has changed
+                old_category_bytes = bytes.fromhex(t['category'])
+                old_category = decrypt(old_category_bytes, self._encryption_key).decode('utf-8')
+
+                # Get the new category from the rules
+                new_category = self._get_category_from_rules(decrypted_desc)
+
+                # If the category has changed, update it in the database
+                if new_category != old_category:
+                    encrypted_new_category = encrypt(new_category.encode('utf-8'), self._encryption_key)
+                    self.db.execute_query(
+                        "UPDATE transactions SET category = ? WHERE id = ?",
+                        (encrypted_new_category.hex(), t['id'])
+                    )
+                    updated_count += 1
+            except Exception:
+                # Skip transactions that fail to decrypt or process
+                continue
+                
+        return updated_count

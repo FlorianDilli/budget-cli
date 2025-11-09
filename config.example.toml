@@ -1,0 +1,73 @@
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ Welcome to your budget configuration!                                     │
+# │ This file is the heart of your budget tracker.                            │
+# │ Fill it out with your financial details to get started.                   │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [user]                                                                    │
+# │ Basic user-specific settings.                                             │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[user]
+currency_symbol = "EUR"               # Your currency symbol (e.g., "$", "£", "¥")
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [importer]                                                                │
+# │ Maps your bank's CSV column names to what the app expects.                │
+# │ Make sure these match the headers in your CSV statement exactly.          │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[importer]
+date_column        = "Value Date"
+description_column = "Partner Name"
+amount_column      = "Amount (EUR)"
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [theme]                                                                   │
+# │ Personalize the look of the app.                                          │
+# │ Use hex codes for colors (e.g., "#FF5733").                               │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[theme]
+accent_color                  = "#FFCF71"  # Color for titles and highlights
+main_color                    = "#FBF6E2"  # General text color
+positive                      = "#A1C398"  # Color for positive amounts (income)
+negative                      = "#FA7070"  # Color for negative amounts (expenses)
+recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions in lists
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [category_rules]                                                          │
+# │ Define keywords to automatically categorize your transactions.            │
+# │ The app scans the transaction's description (case-insensitive).           │
+# │ Format: "CategoryName" = ["keyword1", "keyword2", ...]                    │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[category_rules]
+"Groceries"   = ["supermarket", "grocery", "lidl", "aldi"]
+"Rent"        = ["rent"]
+"Utilities"   = ["electricity", "water", "gas", "internet"]
+"Transport"   = ["uber", "lyft", "taxi", "public transport"]
+"Dining Out"  = ["restaurant", "cafe", "food delivery"]
+"Subscriptions" = ["netflix", "spotify", "hbo"]
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [recurring_transactions]                                                  │
+# │ This is the most important section for calculating your budget.           │
+# │ List all your predictable income and expenses here. The app uses this to  │
+# │ calculate your "normalized monthly budget."                               │
+# │                                                                           │
+# │ - `description`: A clear name for the transaction.                        │
+# │ - `amount`: Use positive for income, negative for expenses.               │
+# │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# --- Example Income ---
+[[recurring_transactions]]
+description       = "Monthly Salary"
+amount            = 3000.00
+recurrence_months = 1
+
+# --- Example Yearly Expense ---
+# The app automatically spreads this cost across the year in your budget.
+# e.g., -240 / 12 months = -20 per month.
+[[recurring_transactions]]
+description       = "Car Insurance"
+amount            = -240.00
+recurrence_months = 12
