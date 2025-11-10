@@ -2,15 +2,45 @@
 
 Minimal Budget CLI is a simple, terminal-based application designed to help you track your finances without the bloat of larger applications. It's built for privacy and simplicity, encrypting all your financial data and storing it locally on your computer. With this tool, you can easily import your bank statements, categorize your spending, and get a clear picture of your budget.
 
-## Installation
+## Prerequisites
 
-### 1. Download
-First, download the application files from the source where you obtained them (e.g., clone the repository or download the ZIP file).
+Before you begin, ensure you have Python installed on your system. You can download it from the official [Python website](https://www.python.org/downloads/). During installation, make sure to check the box that says "Add Python to PATH" on Windows.
 
-### 2. Install Requirements
-This application has a few dependencies that need to be installed. Open your terminal, navigate to the project directory, and run the following command to install them:
+## Installation and Setup
+
+Follow these steps to get Minimal Budget CLI up and running on your system.
+
+### Step 1: Download the Latest Release
+
+1.  Go to the [latest release on GitHub](https://github.com/florian-lefebvre/minimal-budget-cli/releases).
+2.  Download the ZIP file for your operating system (Windows, macOS, or Linux).
+
+### Step 2: Unzip the File
+
+Once the download is complete, unzip the file in a location where you want to keep the application, for example, your `Documents` folder.
+
+### Step 3: Install Dependencies
+
+1.  Open your terminal (or Command Prompt on Windows).
+2.  Navigate to the directory where you unzipped the files. For example:
+    ```bash
+    # On macOS or Linux
+    cd ~/Documents/minimal-budget-cli
+
+    # On Windows
+    cd C:\Users\YourUsername\Documents\minimal-budget-cli
+    ```
+3.  Install the required Python packages by running:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### Step 4: Run the Application
+
+Now you can run the application for the first time. In the same terminal window, run the following command:
+
 ```bash
-pip install -r requirements.txt
+python main.py
 ```
 
 ## Setup
@@ -25,7 +55,7 @@ The `config.toml` file is where you configure the application to suit your needs
 - List your recurring income and expenses (like salary or rent).
 
 ### 3. Further Information
-For more detailed information on how the budget is calculated and how to use the application, please refer to the `FAQ.md` file.
+For more detailed information on how the budget is calculated and how to use the application, please refer to the [Frequently Asked Questions](FAQ.md) file.
 
 ## Menu Explanations
 
