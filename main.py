@@ -12,12 +12,12 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt, Confirm
 
-from core import BudgetEngine
-from importer import discover_csv_files, import_transactions
+from app.core import BudgetEngine
+from app.importer import discover_csv_files, import_transactions
 
 # --- Constants ---
-DB_PATH = "data/budget.db"
-STATEMENTS_DIR = "data/statements"
+DB_PATH = "userdata/budget.db"
+STATEMENTS_DIR = "userdata/statements"
 
 # --- TUI components ---
 console = Console()
@@ -372,9 +372,9 @@ def main():
         
         # Temporarily load config to get theme for password prompt
         temp_config = {}
-        if os.path.exists("config.toml"):
+        if os.path.exists("userdata/config.toml"):
             import toml
-            temp_config = toml.load("config.toml")
+            temp_config = toml.load("userdata/config.toml")
         theme = temp_config.get("theme", {"accent_color": "#00FFFF", "main_color": "#00FFFF"})
 
         password = show_password_prompt(is_initial_setup, theme)

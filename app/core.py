@@ -5,13 +5,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, List, Tuple
 
-from database import DatabaseManager
-from crypto import derive_key, encrypt, decrypt, generate_salt
+from app.database import DatabaseManager
+from app.crypto import derive_key, encrypt, decrypt, generate_salt
 
 class BudgetEngine:
     """Manages the application's core logic, state, and business rules."""
 
-    def __init__(self, db_path: str, password: str, config_path: str = "config.toml"):
+    def __init__(self, db_path: str, password: str, config_path: str = "userdata/config.toml"):
         """
         Initializes the core engine.
 
@@ -275,17 +275,15 @@ class BudgetEngine:
         # Default category if no rules match
         return "Uncategorized"
 
-    def add_expense(self, date: str, description: str, amount: float, category: str):
+    def add_expense(self, date: str, description: str, amount: float, category: str) -> bool:
         """
-        Adds a new manual expense to the database.
-        Encrypts the description before storing.
+        Adds a new expense to the database after checking for duplicates.
+        Encrypts sensitive fields before storing.
+
+        Returns:
+            True if the transaction was added successfully, False otherwise.
         """
         import hashlib
-
-        # Encrypt the description
-        encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
-        encrypted_amount = encrypt(str(amount).encode('utf-8'), self._encryption_key)
-        encrypted_category = encrypt(category.encode('utf-8'), self._encryption_key)
 
         # Create a unique hash to prevent duplicates
         unique_string = f"{date}-{description}-{amount}"
@@ -294,15 +292,30 @@ class BudgetEngine:
         # Check for duplicates before inserting
         existing = self.db.fetch_all("SELECT 1 FROM transactions WHERE unique_hash = ?", (unique_hash,))
         if existing:
-            raise ValueError("This transaction appears to be a duplicate.")
+            return False  # Duplicate found
 
-        self.db.execute_query(
-            """
-            INSERT INTO transactions (transaction_date, description, amount, category, unique_hash)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash)
-        )
+        # Encrypt sensitive fields
+        try:
+            encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
+            encrypted_amount = encrypt(str(amount).encode('utf-8'), self._encryption_key)
+            encrypted_category = encrypt(category.encode('utf-8'), self._encryption_key)
+        except Exception as e:
+            # Handle potential encryption errors without crashing
+            raise RuntimeError(f"Encryption failed: {e}")
+
+        # Insert the new transaction
+        try:
+            self.db.execute_query(
+                """
+                INSERT INTO transactions (transaction_date, description, amount, category, unique_hash)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash)
+            )
+            return True
+        except Exception as e:
+            # Handle potential database errors
+            raise RuntimeError(f"Database insertion failed: {e}")
 
     def get_recent_transactions(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Retrieves and decrypts the most recent transactions."""
@@ -394,8 +407,9 @@ class BudgetEngine:
             os.remove(self.db_path)
             
         # Also delete the config file so it gets recreated from the template on next run
-        if os.path.exists(self.config_path):
-            os.remove(self.config_path)
+        # Also delete the config file so it gets recreated from the template on next run
+        if os.path.exists("userdata/config.toml"):
+            os.remove("userdata/config.toml")
 
     def _reset_state_and_reconnect(self) -> None:
         from datetime import datetime

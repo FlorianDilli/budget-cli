@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
-from core import BudgetEngine
+from app.core import BudgetEngine
 
 def discover_csv_files(directory: str) -> List[str]:
     """
@@ -140,24 +140,30 @@ def import_transactions(engine: BudgetEngine, csv_path: str) -> int:
     skipped_transactions_count = 0  # To count duplicates
     for record in raw_records:
         try:
-            # Pass the engine to the normalization function for categorization
             normalized_record = normalize_transaction(record, engine)
             
-            # The engine's add_expense handles duplicates and other validation
-            engine.add_expense(
+            # The updated add_expense returns False for duplicates
+            was_added = engine.add_expense(
                 date=normalized_record['transaction_date'],
                 description=normalized_record['description'],
                 amount=normalized_record['amount'],
                 category=normalized_record['category']
             )
-            new_transactions_count += 1
-        
-        except ValueError:
-            # Catches normalization errors or duplicate errors from add_expense
+            
+            if was_added:
+                new_transactions_count += 1
+            else:
+                # This is now the specific check for a duplicate
+                skipped_transactions_count += 1
+
+        except ValueError as e:
+            # Catches normalization errors
+            print(f"Skipping record due to normalization error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
         except RuntimeError as e:
-            print(f"Database error while importing {record}: {e}")
+            # Catches database or encryption errors from the engine
+            print(f"Skipping record due to a critical error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
 

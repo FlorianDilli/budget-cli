@@ -7,14 +7,6 @@ __pycache__/
 env/
 venv/
 
-# Database
-data/budget.db
-
-# Logs
-debug.log
-
-# Statements
-data/statements/
-# Config
-config.toml
+# User Data
+userdata/
 .kilocode/

@@ -10,19 +10,23 @@ Before you begin, ensure you have Python installed on your system. You can downl
 
 Follow these steps to get Minimal Budget CLI up and running on your system.
 
-### Step 1: Download the Latest Release
+### Step 1: Clone the Repository
 
-1.  Go to the [latest release on GitHub](https://github.com/florian-lefebvre/minimal-budget-cli/releases).
-2.  Download the ZIP file for your operating system (Windows, macOS, or Linux).
+First, you need to clone the repository to your local machine. Open your terminal and run the following command in the directory where you want to store the application:
 
-### Step 2: Unzip the File
+```bash
+git clone https://github.com/florian-lefebvre/minimal-budget-cli.git
+```
+This will create a `minimal-budget-cli` folder with the application files. If you want to use the stable version, you are all set. If you want to use the developer version and get the latest changes as they are being developed, switch to the developer branch with the following commands:
+```bash
+git checkout developer
+git pull origin developer
+```
 
-Once the download is complete, unzip the file in a location where you want to keep the application, for example, your `Documents` folder.
-
-### Step 3: Install Dependencies
+### Step 2: Install Dependencies
 
 1.  Open your terminal (or Command Prompt on Windows).
-2.  Navigate to the directory where you unzipped the files. For example:
+2.  Navigate to the directory where you cloned the repository. For example:
     ```bash
     # On macOS or Linux
     cd ~/Documents/minimal-budget-cli
@@ -34,13 +38,24 @@ Once the download is complete, unzip the file in a location where you want to ke
     ```bash
     pip install -r requirements.txt
     ```
-
-### Step 4: Run the Application
+### Step 3: Run the Application
 
 Now you can run the application for the first time. In the same terminal window, run the following command:
 
 ```bash
 python main.py
+```
+
+## Updating
+
+To update the application to the latest version, navigate to the application directory in your terminal and use the following git commands.
+If you are on the `main` branch run:
+```bash
+git pull origin main
+```
+If you are on the `developer` branch run:
+```bash
+git pull origin developer
 ```
 
 ## Setup
