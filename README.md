@@ -93,3 +93,5 @@ This menu gives you options to manage your data:
 
 ### Exit
 Safely closes the application.
+
+this is a change on the developer branch
