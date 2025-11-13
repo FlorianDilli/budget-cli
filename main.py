@@ -360,7 +360,6 @@ def main():
     """The main entry point of the application."""
     
     # Ensure data directories exist
-    os.makedirs("data", exist_ok=True)
     os.makedirs(STATEMENTS_DIR, exist_ok=True)
     
     
@@ -372,10 +371,17 @@ def main():
         
         # Temporarily load config to get theme for password prompt
         temp_config = {}
-        if os.path.exists("userdata/config.toml"):
+        # Load the example config to get the default theme for the initial setup
+        config_path = "userdata/config.toml" if os.path.exists("userdata/config.toml") else "config.example.toml"
+        
+        try:
             import toml
-            temp_config = toml.load("userdata/config.toml")
-        theme = temp_config.get("theme", {"accent_color": "#00FFFF", "main_color": "#00FFFF"})
+            temp_config = toml.load(config_path)
+            theme = temp_config.get("theme", {"accent_color": "#00FFFF", "main_color": "#00FFFF"})
+        except (IOError, toml.TomlDecodeError) as e:
+            console.print(f"[bold red]Error loading theme from {config_path}: {e}[/bold red]")
+            theme = {"accent_color": "#00FFFF", "main_color": "#00FFFF"}
+
 
         password = show_password_prompt(is_initial_setup, theme)
         try:

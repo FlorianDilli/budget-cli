@@ -9,7 +9,7 @@
 # │ Basic user-specific settings.                                             │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [user]
-currency_symbol = "EUR"               # Your currency symbol (e.g., "$", "£", "¥")
+currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [importer]                                                                │
@@ -27,10 +27,10 @@ amount_column      = "Amount (EUR)"
 # │ Use hex codes for colors (e.g., "#FF5733").                               │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [theme]
-accent_color                  = "#FFCF71"  # Color for titles and highlights
-main_color                    = "#FBF6E2"  # General text color
-positive                      = "#A1C398"  # Color for positive amounts (income)
-negative                      = "#FA7070"  # Color for negative amounts (expenses)
+accent_color                    = "#FFCF71"  # Color for titles and highlights
+main_color                      = "#FBF6E2"  # General text color
+positive                        = "#A1C398"  # Color for positive amounts (income)
+negative                        = "#FA7070"  # Color for negative amounts (expenses)
 recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions in lists
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
@@ -40,12 +40,13 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │ Format: "CategoryName" = ["keyword1", "keyword2", ...]                    │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [category_rules]
-"Groceries"   = ["supermarket", "grocery", "lidl", "aldi"]
-"Rent"        = ["rent"]
-"Utilities"   = ["electricity", "water", "gas", "internet"]
-"Transport"   = ["uber", "lyft", "taxi", "public transport"]
-"Dining Out"  = ["restaurant", "cafe", "food delivery"]
-"Subscriptions" = ["netflix", "spotify", "hbo"]
+# --- Example Category Rules ---
+# "Groceries"   = ["supermarket", "grocery", "lidl", "aldi"]
+# "Rent"        = ["rent"]
+# "Utilities"   = ["electricity", "water", "gas", "internet"]
+# "Transport"   = ["uber", "lyft", "taxi", "public transport"]
+# "Dining Out"  = ["restaurant", "cafe", "food delivery"]
+# "Subscriptions" = ["netflix", "spotify", "hbo"]
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [recurring_transactions]                                                  │
@@ -59,15 +60,15 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # ╰───────────────────────────────────────────────────────────────────────────╯
 
 # --- Example Income ---
-[[recurring_transactions]]
-description       = "Monthly Salary"
-amount            = 3000.00
-recurrence_months = 1
+# [[recurring_transactions]]
+# description       = "Monthly Salary"
+# amount            = 3000.00
+# recurrence_months = 1
 
 # --- Example Yearly Expense ---
 # The app automatically spreads this cost across the year in your budget.
 # e.g., -240 / 12 months = -20 per month.
-[[recurring_transactions]]
-description       = "Car Insurance"
-amount            = -240.00
-recurrence_months = 12
+# [[recurring_transactions]]
+# description       = "Car Insurance"
+# amount            = -240.00
+# recurrence_months = 12
