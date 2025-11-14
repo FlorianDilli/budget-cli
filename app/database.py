@@ -1,4 +1,4 @@
-import sqlite3
+from sqlcipher3 import dbapi2 as sqlite3
 from typing import List, Tuple, Any
 
 class DatabaseManager:
@@ -16,33 +16,50 @@ class DatabaseManager:
         self.db_path = db_path
         self.conn = None
 
-    def connect(self, password: str) -> None:
+    def connect(self, password: str, initial_setup: bool = False) -> None:
         """
-        Establishes a connection to the encrypted database and sets up the schema.
+        Establishes a connection to the encrypted database.
 
         Args:
-            password: The key for the encrypted database.
+            password: The key for the database.
+            initial_setup: If True, connects without verifying the key,
+                           allowing access to an unencrypted or new database
+                           to fetch the salt.
         """
+        if self.conn:
+            self.close()
+
         if not isinstance(password, str) or not password:
             raise ValueError("A valid password must be provided.")
 
         try:
-            # SQLCipher is not thread-safe, so we disable thread checks
+            # Connect to the database file. SQLCipher handles file creation.
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            
-            # Use PRAGMA key to set the encryption key
-            self.conn.execute(f"PRAGMA key = '{password}'")
-            
-            # Verify the key and database integrity
-            self.conn.execute("SELECT count(*) FROM sqlite_master;")
-            
+
+            # Set the encryption key. This is the main SQLCipher command.
+            self.conn.execute("PRAGMA key = '{}'".format(password.replace("'", "''")))
+
+            # If it's not the initial setup, we must verify the key.
+            # An incorrect key will cause the next query to fail.
+            if not initial_setup:
+                self.conn.execute("SELECT count(*) FROM sqlite_master;")
+
+            # Always ensure tables exist, especially for a new database.
             self.setup_tables()
+
         except sqlite3.DatabaseError as e:
             self.close()
-            raise RuntimeError(f"Failed to connect to the database. Incorrect password or corrupted file: {e}")
+            error_message = str(e).lower()
+            if "file is not a database" in error_message or "database disk image is malformed" in error_message:
+                raise RuntimeError("Failed to connect. Incorrect password or corrupted database file.")
+            raise RuntimeError(f"Database error during connection: {e}")
         except Exception as e:
             self.close()
             raise RuntimeError(f"An unexpected error occurred during database connection: {e}")
+
+    def is_connected(self) -> bool:
+        """Checks if the database connection is active."""
+        return self.conn is not None
 
     def setup_tables(self) -> None:
         """Creates the necessary tables if they don't exist."""

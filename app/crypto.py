@@ -33,7 +33,7 @@ def derive_key(password: str, salt: bytes) -> bytes:
             'sha256',
             password.encode('utf-8'),
             salt,
-            100000,  # Iterations
+            600000,  # Iterations
             dklen=AES_KEY_LEN
         )
         return key

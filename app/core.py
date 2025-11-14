@@ -71,14 +71,39 @@ class BudgetEngine:
 
     def _connect_to_db(self) -> None:
         """Derives the DB key and connects to the database."""
-        # Use a fixed salt for the database key for simplicity.
-        # A more complex system might store a user-specific salt.
-        db_salt = b'__a_fixed_salt__'
-        db_key = derive_key(self.password, db_salt).hex()
-        self.db.connect(db_key)
+        # The key for the database is derived from the user's password and a salt.
+        # This salt is stored in the database itself in the 'meta' table.
+        #
+        # 1. Connect to the database *without* a key to check if it's encrypted
+        #    and to retrieve the salt if it exists.
+        #
+        # The initial connection is made to an empty or existing database file.
+        # SQLCipher will transparently handle creating the file if it doesn't exist.
+        
+        self.db.connect(self.password, initial_setup=True)
 
-        # Derive and store a separate key for field-level encryption
-        encryption_salt = self._get_or_create_encryption_salt()
+
+        # 2. Retrieve the salt. If it doesn't exist, create it.
+        db_salt_hex = self.db.get_meta('db_salt')
+        if db_salt_hex:
+            db_salt = bytes.fromhex(db_salt_hex)
+        else:
+            # This is a fresh database, so we create a new salt.
+            db_salt = os.urandom(16)
+            self.db.set_meta('db_salt', db_salt.hex())
+
+        # 3. Now that the salt is guaranteed to exist, connect to the database
+        # using the user's password. SQLCipher will handle the key derivation
+        # internally using the salt from the database.
+        self.db.connect(self.password)
+
+        # 4. Derive a separate key for field-level encryption.
+        encryption_salt_hex = self.db.get_meta('encryption_salt')
+        if encryption_salt_hex:
+            encryption_salt = bytes.fromhex(encryption_salt_hex)
+        else:
+            encryption_salt = self._get_or_create_encryption_salt()
+
         self._encryption_key = derive_key(self.password, encryption_salt)
 
     def _get_or_create_encryption_salt(self) -> bytes:

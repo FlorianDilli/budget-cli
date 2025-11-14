@@ -2,3 +2,4 @@ rich
 simple-term-menu
 pycryptodome
 toml
+sqlcipher3
