@@ -21,7 +21,14 @@ def discover_csv_files(directory: str) -> List[str]:
     if not os.path.isdir(directory):
         raise ValueError(f"'{directory}' is not a valid directory.")
     
-    return [os.path.join(directory, f) for f in os.listdir(directory) if f.lower().endswith('.csv')]
+    discovered_files = []
+    for f in os.listdir(directory):
+        if f.lower().endswith('.csv'):
+            filepath = os.path.join(directory, f)
+            # Security check: ensure the path is within the intended directory
+            if os.path.abspath(filepath).startswith(os.path.abspath(directory)):
+                discovered_files.append(filepath)
+    return discovered_files
 
 def parse_csv(filepath: str) -> List[Dict[str, Any]]:
     """
@@ -35,8 +42,13 @@ def parse_csv(filepath: str) -> List[Dict[str, Any]]:
         A list of dictionaries, where each dictionary represents a transaction.
     """
     transactions = []
+    
+    # Security check: ensure the file is not excessively large
+    if os.path.getsize(filepath) > 10_000_000:  # 10 MB limit
+        raise RuntimeError(f"File '{filepath}' is too large to process.")
+
     try:
-        with open(filepath, mode='r', encoding='utf-8') as csvfile:
+        with open(filepath, mode='r', encoding='utf-8-sig') as csvfile:  # Use utf-8-sig to handle BOM
             reader = csv.DictReader(csvfile)
             for row in reader:
                 transactions.append(row)
@@ -58,12 +70,13 @@ def normalize_transaction(record: Dict[str, Any], engine: BudgetEngine) -> Dict[
     try:
         # --- Date Normalization ---
         date_column = engine.config['importer']['date_column']
-        if date_column not in record:
-            raise ValueError(f"Date column '{date_column}' not found in record.")
+        if date_column not in record or not record[date_column]:
+            raise ValueError(f"Date column '{date_column}' not found or is empty in record.")
         raw_date = record[date_column]
 
         normalized_date = None
-        for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y'):
+        # Extended list of common date formats
+        for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y', '%b %d, %Y'):
             try:
                 normalized_date = datetime.strptime(raw_date, fmt).strftime('%Y-%m-%d')
                 break
@@ -75,9 +88,13 @@ def normalize_transaction(record: Dict[str, Any], engine: BudgetEngine) -> Dict[
 
         # --- Amount Normalization ---
         amount_column = engine.config['importer']['amount_column']
-        if amount_column not in record:
-            raise ValueError(f"Amount column '{amount_column}' not found in record.")
+        if amount_column not in record or not record[amount_column]:
+            raise ValueError(f"Amount column '{amount_column}' not found or is empty in record.")
         raw_amount = record[amount_column]
+
+        # Basic security check: disallow common non-numeric characters except for decimal points and signs
+        if any(c in raw_amount for c in ['$', ',', '€', '£', ' ']):
+             raw_amount = raw_amount.replace('$', '').replace(',', '').replace('€', '').replace('£', '').replace(' ', '')
 
         amount_decimal = Decimal(raw_amount.strip())
         amount = float(amount_decimal)
@@ -107,25 +124,31 @@ def normalize_transaction(record: Dict[str, Any], engine: BudgetEngine) -> Dict[
     except (InvalidOperation, ValueError) as e:
         raise ValueError(f"Could not normalize record {record}: {e}")
 
-def delete_file(filepath: str) -> None:
+def delete_file(filepath: str, allowed_directory: str) -> None:
     """
-    Deletes a file from the filesystem.
+    Deletes a file from the filesystem, with a security check.
 
     Args:
         filepath: The path to the file to be deleted.
+        allowed_directory: The directory where deletions are permitted.
     """
+    # Security check: Ensure we are only deleting files in the designated import folder
+    if not os.path.abspath(filepath).startswith(os.path.abspath(allowed_directory)):
+        raise RuntimeError(f"Security violation: Attempted to delete a file outside the import directory: {filepath}")
+
     try:
         os.remove(filepath)
     except OSError as e:
         raise RuntimeError(f"Error deleting file {filepath}: {e}")
 
-def import_transactions(engine: BudgetEngine, csv_path: str) -> int:
+def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> int:
     """
     Full pipeline for importing transactions from a CSV file.
 
     Args:
         engine: An instance of the BudgetEngine.
         csv_path: The full path to the CSV file to import.
+        import_dir: The directory where the csv file is located.
 
     Returns:
         The number of new transactions successfully imported.
@@ -174,7 +197,8 @@ def import_transactions(engine: BudgetEngine, csv_path: str) -> int:
 
     # Finally, delete the imported CSV file
     try:
-        delete_file(csv_path)
+        # Pass the directory from the engine's config to ensure safe deletion
+        delete_file(csv_path, import_dir)
         print(f"  - Deleted source file: '{os.path.basename(csv_path)}'")
     except RuntimeError as e:
         print(f"  - Warning: Could not delete source file: {e}")

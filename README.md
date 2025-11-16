@@ -56,10 +56,18 @@ git pull origin main
 ## ⚙️ Setup
 
 ### 🔑 1. Create a Password
-The first time you run the application, you will be prompted to create a password. This password encrypts your budget file, so choose something secure that you will remember. You will need this password every time you open the application.
+The first time you run the application, you will be prompted to create a password. This password encrypts your budget file, so it's important to choose something secure that you will remember.
+
+**Creating a Strong Master Password**
+A strong master password is crucial for keeping your financial data secure. Here are a few recommendations:
+- **Length**: Aim for a password that is at least 12-16 characters long. The longer, the better.
+- **Complexity**: Use a mix of uppercase and lowercase letters, numbers, and symbols (e.g., !, @, #, $).
+- **Uniqueness**: Avoid using common words, phrases, or personal information like birthdays or names. Consider using a password manager to generate and store a strong, unique password.
+
+You will need this password every time you open the application.
 
 ### 📝 2. Set Up `config.toml`
-The `config.toml` file is where you configure the application to suit your needs. When you first run the app, a `config.toml` file will be created for you from `config.example.toml`. You can edit this file to:
+The `config.toml` file is where you configure the application to suit your needs. When you first run the app, a `config.toml` and `budget.db` file will be created for you. These are stored in the `data` directory inside the main application folder. You can edit the `config.toml` to:
 - Set your currency symbol.
 - Define rules to automatically categorize your transactions.
 - List your recurring income and expenses (like salary or rent).

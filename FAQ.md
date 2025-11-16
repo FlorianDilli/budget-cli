@@ -46,3 +46,16 @@ If transactions are not imported correctly, it is usually due to one of the foll
 3.  **File Location**: Make sure your bank statement CSV file is placed inside the `data/statements` directory. The importer only looks for files in this location.
 
 If you have fixed the configuration, you can delete the incorrectly imported month's data using the "Delete Data" menu and then try importing the CSV file again.
+### How can I back up and restore my data?
+
+Since all your financial data is stored in a single `budget.db` file, backing up and restoring is simple.
+
+**To back up your data:**
+1.  Locate the `budget.db` file in the `data` directory inside the application folder.
+2.  Copy this file to a secure location, such as an external hard drive, a USB stick, or a cloud storage service (like Google Drive or Dropbox).
+
+**To restore your data:**
+1.  Make sure the application is closed.
+2.  Copy your backed-up `budget.db` file back into the `data` directory.
+3.  If a `budget.db` file already exists in the `data` directory, you will be asked if you want to replace it. Confirm that you want to replace the existing file with your backup.
+4.  The next time you open the application, it will load your restored data.

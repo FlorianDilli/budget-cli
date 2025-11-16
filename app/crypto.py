@@ -1,20 +1,31 @@
 import os
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from hashlib import pbkdf2_hmac, sha256
+import argon2.low_level
+from argon2.exceptions import HashingError
 
-# Constants for Argon2id (kept for salt length consistency)
+# Constants for Argon2id
 ARGON2_SALT_LEN = 16
+# Parameters for Argon2id, OWASP recommendations as of October 2023
+# Use at least 19 MiB memory, 2 iterations, and 1 degree of parallelism.
+# For more sensitive files or less powerful systems, adjust accordingly.
+# Note: These parameters significantly impact performance.
+ARGON2_TIME_COST = 2
+ARGON2_MEMORY_COST = 19 * 1024  # 19 MiB
+ARGON2_PARALLELISM = 1
+ARGON2_HASH_LEN = 32  # For AES-256
+ARGON2_TYPE = "id"  # Argon2id is the recommended variant
+
 
 # Constants for AES-GCM
 AES_KEY_LEN = 32 # 256-bit
 AES_NONCE_LEN = 12 # 96-bit is recommended for GCM
 AES_TAG_LEN = 16 # 128-bit
 
+
 def derive_key(password: str, salt: bytes) -> bytes:
     """
-    Derives a key from a password and salt using PBKDF2-HMAC-SHA256.
-    NOTE: This is a less secure method used to bypass Argon2 library issues.
+    Derives a key from a password and salt using Argon2.
 
     Args:
         password: The master password.
@@ -23,29 +34,31 @@ def derive_key(password: str, salt: bytes) -> bytes:
     Returns:
         The derived 32-byte key.
     """
+
+
     if not isinstance(password, str):
         raise TypeError("Password must be a string.")
     if not isinstance(salt, bytes) or len(salt) != ARGON2_SALT_LEN:
         raise ValueError(f"Salt must be a {ARGON2_SALT_LEN}-byte byte string.")
 
+
     try:
-        key = pbkdf2_hmac(
-            'sha256',
-            password.encode('utf-8'),
-            salt,
-            600000,  # Iterations
-            dklen=AES_KEY_LEN
+        # Use the low-level raw hash function for key derivation
+        key = argon2.low_level.hash_secret_raw(
+            secret=password.encode('utf-8'),
+            salt=salt,
+            time_cost=ARGON2_TIME_COST,
+            memory_cost=ARGON2_MEMORY_COST,
+            parallelism=ARGON2_PARALLELISM,
+            hash_len=ARGON2_HASH_LEN,
+            type=argon2.low_level.Type.ID
         )
         return key
-    except Exception as e:
-        # Securely wipe password from memory in case of error
-        password_bytes = password.encode('utf-8')
-        password_bytes = b'\x00' * len(password_bytes)
+    except HashingError as e:
         raise RuntimeError(f"Key derivation failed: {e}")
-    finally:
-        # Securely wipe sensitive data
-        password_bytes = password.encode('utf-8')
-        password_bytes = b'\x00' * len(password_bytes)
+    except Exception as e:
+        # Broader exception for other potential issues
+        raise RuntimeError(f"An unexpected error occurred during key derivation: {e}")
 
 
 def encrypt(plaintext: bytes, key: bytes) -> bytes:

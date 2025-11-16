@@ -37,7 +37,7 @@ class DatabaseManager:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
 
             # Set the encryption key. This is the main SQLCipher command.
-            self.conn.execute("PRAGMA key = '{}'".format(password.replace("'", "''")))
+            self.conn.execute(f"PRAGMA key = '{password}'")
 
             # If it's not the initial setup, we must verify the key.
             # An incorrect key will cause the next query to fail.

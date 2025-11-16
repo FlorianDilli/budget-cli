@@ -105,6 +105,7 @@ class BudgetEngine:
             encryption_salt = self._get_or_create_encryption_salt()
 
         self._encryption_key = derive_key(self.password, encryption_salt)
+        self.password = None # Clear password from memory after use
 
     def _get_or_create_encryption_salt(self) -> bytes:
         """
@@ -152,12 +153,15 @@ class BudgetEngine:
         """
         transactions = self.config.get('recurring_transactions', [])
         
-        # Basic validation to ensure "amount" is a number
+        # Enhanced validation for recurring transactions
         for t in transactions:
+            description = t.get('description', 'N/A')
             if not isinstance(t.get('amount'), (int, float)):
-                raise ValueError(f"Invalid amount for recurring transaction: {t.get('description')}")
-            if not isinstance(t.get('recurrence_months'), int) or t.get('recurrence_months', 0) <= 0:
-                raise ValueError(f"Invalid recurrence for transaction: {t.get('description')}")
+                raise ValueError(f"Invalid or missing 'amount' for recurring transaction: '{description}'")
+            
+            recurrence = t.get('recurrence_months')
+            if not isinstance(recurrence, int) or recurrence <= 0:
+                raise ValueError(f"Invalid or missing 'recurrence_months' for recurring transaction: '{description}'")
 
         return transactions
 

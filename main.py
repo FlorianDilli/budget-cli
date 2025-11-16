@@ -276,7 +276,7 @@ def run_importer(engine: BudgetEngine):
         with console.status("[bold green]Importing...[/bold green]"):
             for f in csv_files:
                 # The importer needs the full engine to handle encryption
-                count = import_transactions(engine, f)
+                count = import_transactions(engine, f, STATEMENTS_DIR)
                 total_imported += count
         
         console.print(f"\n[bold green]Import complete! Added {total_imported} new transactions.[/bold green]")

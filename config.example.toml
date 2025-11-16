@@ -1,3 +1,8 @@
+# SECURITY WARNING:
+# This file is NOT encrypted. Storing sensitive financial data or personally
+# identifiable information (PII) in this file is a security risk.
+# Ensure this file is stored in a secure, access-controlled location.
+
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ Welcome to your budget configuration!                                     │
 # │ This file is the heart of your budget tracker.                            │
