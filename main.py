@@ -359,7 +359,8 @@ def show_delete_data_view(engine: BudgetEngine):
 def main():
     """The main entry point of the application."""
     
-    # Ensure data directories exist
+    # Ensure data directories exist (for DB, config, and statements)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     os.makedirs(STATEMENTS_DIR, exist_ok=True)
     
     

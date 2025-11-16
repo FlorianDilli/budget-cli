@@ -1,13 +1,14 @@
-# SECURITY WARNING:
-# This file is NOT encrypted. Storing sensitive financial data or personally
-# identifiable information (PII) in this file is a security risk.
-# Ensure this file is stored in a secure, access-controlled location.
-
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ Welcome to your budget configuration!                                     │
 # │ This file is the heart of your budget tracker.                            │
 # │ Fill it out with your financial details to get started.                   │
 # ╰───────────────────────────────────────────────────────────────────────────╯
+
+# SECURITY WARNING:
+# This file is NOT encrypted. Storing sensitive financial data or personally
+# identifiable information in this file is a security risk.
+# Ensure this file is stored in a secure, access-controlled location.
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [user]                                                                    │
@@ -15,6 +16,7 @@
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [user]
 currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [importer]                                                                │
@@ -25,6 +27,7 @@ currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
 date_column        = "Value Date"
 description_column = "Partner Name"
 amount_column      = "Amount (EUR)"
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [theme]                                                                   │
@@ -37,6 +40,7 @@ main_color                      = "#FBF6E2"  # General text color
 positive                        = "#A1C398"  # Color for positive amounts (income)
 negative                        = "#FA7070"  # Color for negative amounts (expenses)
 recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions in lists
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [category_rules]                                                          │
@@ -52,6 +56,7 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # "Transport"   = ["uber", "lyft", "taxi", "public transport"]
 # "Dining Out"  = ["restaurant", "cafe", "food delivery"]
 # "Subscriptions" = ["netflix", "spotify", "hbo"]
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [recurring_transactions]                                                  │

@@ -20,8 +20,8 @@ Any recurring transactions that have a different amount than what is defined in 
 
 ### Is my data secure?
 
-Yes. All your financial data is encrypted and stored locally on your computer in a file called `budget.db`. The application uses strong encryption (AES-GCM) and requires your password to decrypt the data every time you open it. Your password is not stored anywhere in the application; it is used to generate an encryption key in memory. This means that without your password, your financial data is unreadable.
-The `config.toml` is not encrypted. Any data you store there is stored in plain text. Keep that in mind.
+All the transactions you import via CSV files are encrypted and stored locally on your computer in a file called `budget.db`. The application uses strong encryption (AES-GCM) and requires your password to decrypt the data every time you open it. Your password is not stored anywhere in the application; it is used to generate an encryption key in memory. This means that without your password, your financial data is unreadable.
+The `config.toml` is NOT encrypted. Any data you store there is stored in plain text. Keep that in mind.
 
 ### How can I delete my data?
 
@@ -48,14 +48,13 @@ If transactions are not imported correctly, it is usually due to one of the foll
 If you have fixed the configuration, you can delete the incorrectly imported month's data using the "Delete Data" menu and then try importing the CSV file again.
 ### How can I back up and restore my data?
 
-Since all your financial data is stored in a single `budget.db` file, backing up and restoring is simple.
+Since all your financial data is stored in the `userdate` folder, backing up and restoring is simple.
 
 **To back up your data:**
-1.  Locate the `budget.db` file in the `data` directory inside the application folder.
-2.  Copy this file to a secure location, such as an external hard drive, a USB stick, or a cloud storage service (like Google Drive or Dropbox).
+1.  Locate the `userdata` folder in the main directory of the app.
+2.  Copy this folder to a secure location, such as an external hard drive, a USB stick, or a cloud storage service.
 
 **To restore your data:**
 1.  Make sure the application is closed.
-2.  Copy your backed-up `budget.db` file back into the `data` directory.
-3.  If a `budget.db` file already exists in the `data` directory, you will be asked if you want to replace it. Confirm that you want to replace the existing file with your backup.
-4.  The next time you open the application, it will load your restored data.
+2.  Copy your backed-up `userdata` folder back into the application directory.
+3.  The next time you open the application, it will load your restored data.

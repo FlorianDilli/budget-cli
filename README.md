@@ -1,6 +1,6 @@
-# 💰 Minimal Budget CLI
+# Minimal Budget CLI
 
-Minimal Budget CLI is a simple, terminal-based application designed to help you track your finances without the bloat of larger applications. It's built for privacy and simplicity, encrypting all your financial data and storing it locally on your computer. With this tool, you can easily import your bank statements, categorize your spending, and get a clear picture of your budget. 🔒
+Minimal Budget CLI is a simple command line interface (CLI) designed to help you track your finances. You can import your bank statements (CSV format) and based on the budget criteria you define, calculate how much budget is left for that month. All bank statements are encrypted after import and the app has no internet access.
 
 ## 🚀 Prerequisites
 
@@ -10,7 +10,7 @@ Before you begin, ensure you have Git and Python installed on your system.
 You'll need Git to download the application files. You can check if you have Git installed by opening your terminal and running `git --version`. If it's not installed, please visit the official [Git website](https://git-scm.com/install/) for detailed installation instructions. The website provides clear guidance for Windows, macOS, and Linux.
 
 ### Python Installation
-You can download Python from the official [Python website](httpss://www.python.org/downloads/). During installation on Windows, make sure to check the box that says "Add Python to PATH".
+You'll need Python to run the application.To check if you have python installed, try running `python --version`. If it's not installed, you can download Python from the official [Python website](httpss://www.python.org/downloads/). During installation on Windows, make sure to check the box that says "Add Python to PATH".
 
 ## 🛠️ Installation and Setup
 
@@ -47,8 +47,7 @@ python main.py
 
 ## 🔄 Updating
 
-To update the application to the latest version, navigate to the application directory in your terminal and use the following git commands.
-If you are on the `main` branch run:
+To update the application to the latest version, navigate to the application directory in your terminal and use the following git command.
 ```bash
 git pull origin main
 ```
@@ -58,16 +57,10 @@ git pull origin main
 ### 🔑 1. Create a Password
 The first time you run the application, you will be prompted to create a password. This password encrypts your budget file, so it's important to choose something secure that you will remember.
 
-**Creating a Strong Master Password**
-A strong master password is crucial for keeping your financial data secure. Here are a few recommendations:
-- **Length**: Aim for a password that is at least 12-16 characters long. The longer, the better.
-- **Complexity**: Use a mix of uppercase and lowercase letters, numbers, and symbols (e.g., !, @, #, $).
-- **Uniqueness**: Avoid using common words, phrases, or personal information like birthdays or names. Consider using a password manager to generate and store a strong, unique password.
-
 You will need this password every time you open the application.
 
 ### 📝 2. Set Up `config.toml`
-The `config.toml` file is where you configure the application to suit your needs. When you first run the app, a `config.toml` and `budget.db` file will be created for you. These are stored in the `data` directory inside the main application folder. You can edit the `config.toml` to:
+The `config.toml` file is where you configure the application to suit your needs. When you first run the app, a `config.toml` and `budget.db` file will be created for you. These are stored in the `userdata` directory inside the main application folder. You can edit the `config.toml` to:
 - Set your currency symbol.
 - Define rules to automatically categorize your transactions.
 - List your recurring income and expenses (like salary or rent).
@@ -84,7 +77,7 @@ The main screen of the application. It gives you a quick summary of your financi
 This menu allows you to look at your financial data from previous months. You can select any month for which you have transaction data and see a detailed summary and a list of all transactions for that period.
 
 ### 🏦 Import Statements
-Here, you can import your bank statements. The application looks for `.csv` files in the `data/statements` directory. Once you place your CSV files there, this option will import them, categorize the transactions based on your rules, and add them to your budget.
+Here, you can import your bank statements. The application looks for `.csv` files in the `userdata/statements` directory. Once you place your CSV files there, this option will import them, categorize the transactions based on your rules, and add them to your budget.
 
 ### ⚙️ Apply changes made in config.toml
 If you make changes to your `config.toml` file while the application is running, use this option to apply them. The application will reload your configuration and re-categorize all your transactions based on any new rules you've added.
