@@ -1,4 +1,5 @@
 import os
+import sys
 import getpass
 from datetime import datetime
 from decimal import Decimal
@@ -22,6 +23,15 @@ STATEMENTS_DIR = "userdata/statements"
 # --- TUI components ---
 console = Console()
 
+
+def clear_terminal_full():
+    """Completely clear the terminal, including scrollback."""
+    if os.name == "nt":
+        os.system("cls")
+    else:
+        sys.stdout.write("\033c")
+        sys.stdout.flush()
+
 def show_password_prompt(is_initial_setup: bool = False, theme: dict = None) -> str:
     """Prompts the user for their master password."""
     
@@ -43,6 +53,8 @@ def show_password_prompt(is_initial_setup: bool = False, theme: dict = None) -> 
             border_style=theme['main_color']
         )
     )
+    console.print()
+    console.print()
     password = getpass.getpass(prompt_message)
     return password
 
@@ -72,6 +84,8 @@ def show_main_dashboard(engine: BudgetEngine):
     
     # Header
     console.print(Panel(f"[bold {theme['accent_color']}]Minimalist Budget Tracker[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
+    console.print()
+    console.print()
 
     # Summary table
     summary_table = Table(show_header=False, box=None, padding=(0, 2))
@@ -93,7 +107,7 @@ def show_main_dashboard(engine: BudgetEngine):
 
     # Top 10 Spending View
 
-    top_spending_table = Table(title=f"[bold {theme['accent_color']}]Where does my money go in {latest_month}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'])
+    top_spending_table = Table(title=f"[bold {theme['accent_color']}]Where does my money go in {latest_month}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'], show_lines=True)
     top_spending_table.add_column("Name", style=theme['main_color'])
     top_spending_table.add_column("Amount", justify="right")
     top_spending_table.add_column("Type", style=theme['main_color'])
@@ -103,50 +117,53 @@ def show_main_dashboard(engine: BudgetEngine):
         name = f"[{theme.get('recurring_transaction_highlight', 'yellow')}]{item['name']}[/{theme.get('recurring_transaction_highlight', 'yellow')}]" if item.get('is_recurring') else item['name']
         top_spending_table.add_row(name, amount_text, item['type'])
         
-    console.print("")
+    console.print()
+    console.print()
     console.print(top_spending_table)
 def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, theme: dict):
     """Renders a progress bar for the monthly budget."""
     
-    # Avoid division by zero if budget is zero
     if allowed_spend <= 0:
-        # If there's no budget, show a full bar if there are expenses, empty otherwise
-        progress = 100 if available_to_spend < 0 else 0
-        remaining_percent = 0
+        remaining_percent = Decimal('0') if available_to_spend >= 0 else Decimal('-100')
+        spent_percent = Decimal('100') if available_to_spend < 0 else Decimal('0')
     else:
-        # Calculate the percentage of the budget that is left
         remaining_percent = (available_to_spend / allowed_spend) * 100
-        
-        # The progress bar should show how much is *spent*, so we calculate 100 - remaining
-        progress = 100 - remaining_percent
+        spent_percent = 100 - remaining_percent
 
-    # Ensure progress is between 0 and 100 for the bar display
-    progress_display = max(0, min(progress, 100))
-    
-    # Ensure remaining percent is not negative for display
+    # For the progress bar, clamp the value between 0 and 100
+    progress_display = max(0, min(remaining_percent, 100))
+
+    # Text display can show the actual percentage
     remaining_percent_display = max(0, remaining_percent)
+
+    
+    # --- Text for the progress bar ---
+    if remaining_percent >= 0:
+        remaining_text = f" {remaining_percent_display:.1f}% remaining"
+    else:
+        # Over budget
+        over_budget_percent = spent_percent
+        remaining_text = f" 0.0% remaining ({over_budget_percent:.1f}% of budget used)"
 
 
     bar_color = theme.get("positive", "green")
     background_color = theme.get("negative", "red")
 
-    # The progress bar will now show the remaining budget, not the spent amount
     progress_bar = ProgressBar(
         total=100,
-        completed=remaining_percent_display,
+        completed=progress_display,
         style=background_color,
         complete_style=bar_color,
         width=50,
     )
 
-    # Create a table to display the progress bar and the remaining percentage
     progress_table = Table.grid(expand=True)
     progress_table.add_column()
     progress_table.add_column(justify="right")
     
     progress_table.add_row(
         progress_bar,
-        Text(f" {remaining_percent_display:.1f}% remaining", style=theme['main_color'])
+        Text(remaining_text, style=theme['main_color'])
     )
 
     console.print(
@@ -167,6 +184,15 @@ def show_history_view(engine: BudgetEngine):
         available_months = engine.get_available_months()
         if not available_months:
             console.clear()
+            console.print(
+                Panel(
+                    f"[bold {engine.config['theme']['accent_color']}]Minimalist Budget Tracker[/bold {engine.config['theme']['accent_color']}]",
+                    expand=False,
+                    border_style=engine.config['theme']['main_color']
+                )
+            )
+            console.print()
+            console.print()
             console.print("[yellow]No transactions found.[/yellow]")
             Prompt.ask("\nPress Enter to return to the main menu.")
             return
@@ -178,6 +204,8 @@ def show_history_view(engine: BudgetEngine):
         
         console.clear()
         console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Transaction History[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
+        console.print()
+        console.print()
         
         terminal_menu = TerminalMenu(
             month_menu_items,
@@ -197,6 +225,17 @@ def show_history_view(engine: BudgetEngine):
         theme = engine.config.get("theme", {})
 
         console.clear()
+
+        # --- Header ---
+        console.print(
+            Panel(
+                f"[bold {theme['accent_color']}]Minimalist Budget Tracker[/bold {theme['accent_color']}]",
+                expand=False,
+                border_style=theme['main_color']
+            )
+        )
+        console.print()
+        console.print()
         
         month_title = datetime.strptime(f"{year}-{month}-01", "%Y-%m-%d").strftime("%B %Y")
 
@@ -208,6 +247,8 @@ def show_history_view(engine: BudgetEngine):
         summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme))
         summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme))
         summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme))
+        if 'total_transactions_sum' in summary:
+            summary_table.add_row("Sum of all transactions in month:", format_summary_amount(summary['total_transactions_sum'], summary['currency'], theme))
         
         console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
 
@@ -223,7 +264,7 @@ def show_history_view(engine: BudgetEngine):
         
         if top_spending_view:
 
-            top_spending_table = Table(title=f"[bold {engine.config['theme']['accent_color']}]Where does my money go in {month_title}[/bold {engine.config['theme']['accent_color']}]", expand=True, border_style=engine.config['theme']['main_color'])
+            top_spending_table = Table(title=f"[bold {engine.config['theme']['accent_color']}]Where does my money go in {month_title}[/bold {engine.config['theme']['accent_color']}]", expand=True, border_style=engine.config['theme']['main_color'], show_lines=True)
             top_spending_table.add_column("Name", style=engine.config['theme']['main_color'])
             top_spending_table.add_column("Amount", justify="right")
             top_spending_table.add_column("Type", style=engine.config['theme']['main_color'])
@@ -233,11 +274,12 @@ def show_history_view(engine: BudgetEngine):
                 name = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{item['name']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if item.get('is_recurring') else item['name']
                 top_spending_table.add_row(name, amount_text, item['type'])
                 
-            console.print("")
+            console.print()
+            console.print()
             console.print(top_spending_table)
 
         # --- Full Transaction Table ---
-        trans_table = Table(title=f"[bold {theme['accent_color']}]All Transactions for {month_title}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'])
+        trans_table = Table(title=f"[bold {theme['accent_color']}]All Transactions for {month_title}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'], show_lines=True)
         trans_table.add_column("Date", style="dim")
         trans_table.add_column("Description", style=engine.config['theme']['main_color'])
         trans_table.add_column("Amount", justify="right")
@@ -260,6 +302,8 @@ def run_importer(engine: BudgetEngine):
     """Handles the logic for importing transactions from CSV files."""
     console.clear()
     console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Import Transactions from Statements[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
+    console.print()
+    console.print()
 
     csv_files = discover_csv_files(STATEMENTS_DIR)
     if not csv_files:
@@ -288,6 +332,8 @@ def show_delete_data_view(engine: BudgetEngine):
     """Handles the UI for deleting data."""
     console.clear()
     console.print(Panel(f"[bold {engine.config['theme']['negative']}]Delete Data[/bold {engine.config['theme']['negative']}]", expand=False, border_style=engine.config['theme']['main_color']))
+    console.print()
+    console.print()
 
     menu_items = [
         "Delete a single month's data",
@@ -428,10 +474,13 @@ def main():
         elif menu_index == 3:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
+                clear_terminal_full()
                 break
         elif menu_index == 4 or menu_index is None:
+            clear_terminal_full()
             break
 
+    clear_terminal_full()
     console.print(f"[bold {engine.config['theme']['accent_color']}]Goodbye![/bold {engine.config['theme']['accent_color']}]")
 
 

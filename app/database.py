@@ -74,6 +74,7 @@ class DatabaseManager:
             description BLOB NOT NULL, -- Encrypted
             amount BLOB NOT NULL, -- Encrypted
             category BLOB, -- Encrypted
+            is_recurring INTEGER DEFAULT 0,
             unique_hash TEXT UNIQUE NOT NULL
         );
         """
@@ -86,6 +87,26 @@ class DatabaseManager:
         """
         self.execute_query(create_transactions_table)
         self.execute_query(create_meta_table)
+
+        # --- Schema migration ---
+        # Add the is_recurring column if it doesn't exist.
+        try:
+            # Check if the column already exists
+            cursor = self.conn.cursor()
+            cursor.execute("PRAGMA table_info(transactions);")
+            columns = [info[1] for info in cursor.fetchall()]
+            
+            if 'is_recurring' not in columns:
+                self.conn.execute("ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0;")
+
+            if 'start_date' not in columns:
+                self.conn.execute("ALTER TABLE transactions ADD COLUMN start_date TEXT;")
+
+            self.conn.commit()
+        except sqlite3.Error:
+            # This might fail if the table is empty or in other rare cases.
+            # The initial CREATE TABLE will handle it anyway.
+            pass
 
     def execute_query(self, query: str, params: Tuple = ()) -> None:
         """

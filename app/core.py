@@ -159,21 +159,45 @@ class BudgetEngine:
             if not isinstance(t.get('amount'), (int, float)):
                 raise ValueError(f"Invalid or missing 'amount' for recurring transaction: '{description}'")
             
+            # This validation is now more flexible. It ensures that if 'recurrence_months' is present, it's a positive integer.
+            # This avoids crashing if a transaction is no longer recurring but is still marked as such in the db.
             recurrence = t.get('recurrence_months')
-            if not isinstance(recurrence, int) or recurrence <= 0:
-                raise ValueError(f"Invalid or missing 'recurrence_months' for recurring transaction: '{description}'")
+            if recurrence is not None and (not isinstance(recurrence, int) or recurrence <= 0):
+                raise ValueError(f"Invalid 'recurrence_months' for recurring transaction: '{description}'")
+            
+            start_date = t.get('start_date')
+            if start_date:
+                try:
+                    datetime.strptime(start_date, '%Y-%m-%d')
+                except ValueError:
+                    raise ValueError(f"Invalid 'start_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
 
         return transactions
 
-    def _get_normalized_budget(self) -> Decimal:
+    def _get_normalized_budget(self, effective_date: datetime = None) -> Decimal:
         """
-        Calculates a normalized monthly budget from recurring transactions.
+        Calculates a normalized monthly budget from recurring transactions,
+        considering their start dates.
+
+        Args:
+            effective_date: The date to check against for active transactions.
+                            If None, defaults to the current date.
         """
+        if effective_date is None:
+            effective_date = datetime.now()
+
         total_monthly_flow = Decimal('0')
         
         recurring_transactions = self._get_recurring_transactions()
         
         for t in recurring_transactions:
+            # Check if the transaction is active based on its start_date
+            start_date_str = t.get('start_date')
+            if start_date_str:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                if start_date > effective_date:
+                    continue  # Skip this transaction if it hasn't started yet
+
             amount = Decimal(t['amount'])
             recurrence_months = t.get('recurrence_months', 1)
             
@@ -189,8 +213,6 @@ class BudgetEngine:
         Calculates and returns the main dashboard metrics for the most recent month with transactions.
         If no transactions exist, it defaults to the current month.
         """
-        normalized_monthly_flow = self._get_normalized_budget()
-
         # Determine the most recent month with transactions
         available_months = self.get_available_months()
         today = datetime.now()
@@ -212,30 +234,36 @@ class BudgetEngine:
             # Default to the current month if no transactions are available
             latest_year, latest_month = str(today.year), str(today.month).zfill(2)
             end_of_period = today
+            start_of_month = today.replace(day=1)
             latest_month_str = today.strftime('%B %Y')
+        
+        normalized_monthly_flow = self._get_normalized_budget(effective_date=start_of_month)
 
         # Fetch transactions for the determined period
         transactions_for_period = self.db.get_transactions(year=latest_year, month=latest_month)
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
         
         # Get the descriptions of recurring transactions
-        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
 
         monthly_expenses = Decimal('0')
+        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
         for t in decrypted_transactions:
-            is_recurring = t['description'].lower() in recurring_transactions_map
-            if not is_recurring:
+            if not t['is_recurring']:
                 monthly_expenses += t['amount']
             else:
                 # It's a recurring transaction, check for amount deviation
-                rec_trans_config = recurring_transactions_map[t['description'].lower()]
-                if rec_trans_config.get('recurrence_months') == 1:
-                    defined_amount = Decimal(rec_trans_config['amount'])
-                    actual_amount = t['amount']
-                    difference = actual_amount - defined_amount
+                if t['description'].lower() in recurring_transactions_map:
+                    rec_trans_config = recurring_transactions_map[t['description'].lower()]
                     
-                    if difference != 0:
-                        monthly_expenses += difference
+                    # This check ensures that an outdated recurring transaction (which might still be marked
+                    # as `is_recurring` in the DB) doesn't cause a crash if its config has been removed.
+                    if rec_trans_config.get('recurrence_months') == 1:
+                        defined_amount = Decimal(rec_trans_config['amount'])
+                        actual_amount = t['amount']
+                        difference = actual_amount - defined_amount
+                        
+                        if difference != 0:
+                            monthly_expenses += difference
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
 
@@ -251,38 +279,44 @@ class BudgetEngine:
         """
         Calculates and returns the main dashboard metrics for a specific month.
         """
-        normalized_monthly_flow = self._get_normalized_budget()
-
         # Fetch transactions for the specified month
         transactions_for_period = self.db.get_transactions(year=year, month=month)
+        
+        # Calculate budget based on the start of the selected month
+        effective_date = datetime(int(year), int(month), 1)
+        normalized_monthly_flow = self._get_normalized_budget(effective_date=effective_date)
+
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
         
         # Get the descriptions of recurring transactions
-        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
         
         monthly_expenses = Decimal('0')
+        recurring_transactions_map = {rt['description'].lower(): rt for rt in self._get_recurring_transactions()}
         for t in decrypted_transactions:
-            is_recurring = t['description'].lower() in recurring_transactions_map
-            
-            if not is_recurring:
+            if not t['is_recurring']:
                 monthly_expenses += t['amount']
             else:
                 # It's a recurring transaction, check for amount deviation
-                rec_trans_config = recurring_transactions_map[t['description'].lower()]
-                if rec_trans_config.get('recurrence_months') == 1:
-                    defined_amount = Decimal(rec_trans_config['amount'])
-                    actual_amount = t['amount']
-                    difference = actual_amount - defined_amount
-                    
-                    if difference != 0:
-                        monthly_expenses += difference
+                if t['description'].lower() in recurring_transactions_map:
+                    rec_trans_config = recurring_transactions_map[t['description'].lower()]
+                    if rec_trans_config and rec_trans_config.get('recurrence_months') == 1:
+                        defined_amount = Decimal(rec_trans_config['amount'])
+                        actual_amount = t['amount']
+                        difference = actual_amount - defined_amount
+                        
+                        if difference != 0:
+                            monthly_expenses += difference
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
+        
+        # --- New: Calculate the simple sum of all transactions for the month ---
+        total_transactions_sum = sum(t['amount'] for t in decrypted_transactions)
 
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
             "available_to_spend": available_to_spend,
+            "total_transactions_sum": total_transactions_sum,
             "currency": self.config['user']['currency_symbol']
         }
     def _get_category_from_rules(self, description: str) -> str:
@@ -453,7 +487,6 @@ class BudgetEngine:
     def _decrypt_transactions(self, transactions: List[Any]) -> List[Dict[str, Any]]:
         """Helper to decrypt a list of transaction rows."""
         decrypted_list = []
-        recurring_descriptions = {t['description'].lower() for t in self._get_recurring_transactions()}
 
         for t in transactions:
             try:
@@ -466,15 +499,12 @@ class BudgetEngine:
                 decrypted_amount = Decimal(decrypt(amount_bytes, self._encryption_key).decode('utf-8'))
                 decrypted_category = decrypt(category_bytes, self._encryption_key).decode('utf-8')
 
-                # Check if the transaction is in the recurring list
-                is_recurring = any(rec_desc in decrypted_desc.lower() for rec_desc in recurring_descriptions)
-                
                 decrypted_list.append({
                     "date": t['transaction_date'],
                     "description": decrypted_desc,
                     "amount": decrypted_amount,
                     "category": decrypted_category,
-                    "is_recurring": is_recurring
+                    "is_recurring": bool(t['is_recurring'])
                 })
             except Exception:
                 # If decryption fails, show placeholders for all encrypted fields
@@ -508,28 +538,47 @@ class BudgetEngine:
             The number of transactions that were updated.
         """
         updated_count = 0
-        all_transactions = self.db.get_transactions() # Gets all transactions
+        all_transactions = self.db.get_transactions()  # Gets all transactions
+
+        recurring_descriptions = {trans['description'].lower() for trans in self._get_recurring_transactions()}
 
         for t in all_transactions:
             try:
-                # Decrypt the description to apply rules
                 decrypted_desc = decrypt(bytes.fromhex(t['description']), self._encryption_key).decode('utf-8')
                 
-                # Decrypt the old category to see if it has changed
+                # --- 1. Check for Category Changes ---
                 old_category_bytes = bytes.fromhex(t['category'])
                 old_category = decrypt(old_category_bytes, self._encryption_key).decode('utf-8')
-
-                # Get the new category from the rules
                 new_category = self._get_category_from_rules(decrypted_desc)
-
-                # If the category has changed, update it in the database
-                if new_category != old_category:
+                
+                category_changed = new_category != old_category
+                if category_changed:
                     encrypted_new_category = encrypt(new_category.encode('utf-8'), self._encryption_key)
                     self.db.execute_query(
                         "UPDATE transactions SET category = ? WHERE id = ?",
                         (encrypted_new_category.hex(), t['id'])
                     )
+
+                # --- 2. Check for Recurring Status Changes ---
+                # --- 2. Check for Recurring Status Changes ---
+                old_is_recurring = t['is_recurring']
+                
+                # A transaction is recurring only if its description matches the list AND it has a valid recurrence config.
+                # This prevents an old, recurring transaction from causing a crash if its config is removed.
+                is_in_recurring_list = decrypted_desc.lower() in recurring_descriptions
+                new_is_recurring = 1 if is_in_recurring_list else 0
+                
+                recurring_changed = old_is_recurring != new_is_recurring
+                if recurring_changed:
+                    self.db.execute_query(
+                        "UPDATE transactions SET is_recurring = ? WHERE id = ?",
+                        (new_is_recurring, t['id'])
+                    )
+
+                # --- 3. Increment Counter if any change was made ---
+                if category_changed or recurring_changed:
                     updated_count += 1
+                    
             except Exception:
                 # Skip transactions that fail to decrypt or process
                 continue
