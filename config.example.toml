@@ -69,6 +69,8 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
 # │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │
 # │   This is optional. If omitted, it's active from the beginning.           │
+# │ - `end_date`: The date the recurring transaction can end (YYYY-MM-DD).    │
+# │   Also optional. If omitted, it remains active indefinitely.              │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 
 # --- Example Income ---
@@ -85,3 +87,4 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # amount            = -240.00
 # recurrence_months = 12
 # start_date        = "2023-01-01"
+# end_date          = "2023-12-31"

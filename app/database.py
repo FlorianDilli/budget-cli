@@ -102,6 +102,9 @@ class DatabaseManager:
             if 'start_date' not in columns:
                 self.conn.execute("ALTER TABLE transactions ADD COLUMN start_date TEXT;")
 
+            if 'end_date' not in columns:
+                self.conn.execute("ALTER TABLE transactions ADD COLUMN end_date TEXT;")
+
             self.conn.commit()
         except sqlite3.Error:
             # This might fail if the table is empty or in other rare cases.

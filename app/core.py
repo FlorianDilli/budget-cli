@@ -166,11 +166,24 @@ class BudgetEngine:
                 raise ValueError(f"Invalid 'recurrence_months' for recurring transaction: '{description}'")
             
             start_date = t.get('start_date')
+            parsed_start = None
             if start_date:
                 try:
-                    datetime.strptime(start_date, '%Y-%m-%d')
+                    parsed_start = datetime.strptime(start_date, '%Y-%m-%d')
                 except ValueError:
                     raise ValueError(f"Invalid 'start_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
+
+            end_date = t.get('end_date')
+            if end_date:
+                try:
+                    parsed_end = datetime.strptime(end_date, '%Y-%m-%d')
+                except ValueError:
+                    raise ValueError(f"Invalid 'end_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
+
+                if parsed_start and parsed_end < parsed_start:
+                    raise ValueError(
+                        f"'end_date' must not be before 'start_date' for recurring transaction: '{description}'."
+                    )
 
         return transactions
 
@@ -191,12 +204,18 @@ class BudgetEngine:
         recurring_transactions = self._get_recurring_transactions()
         
         for t in recurring_transactions:
-            # Check if the transaction is active based on its start_date
+            # Check if the transaction is active based on its start/end dates
             start_date_str = t.get('start_date')
             if start_date_str:
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
                 if start_date > effective_date:
                     continue  # Skip this transaction if it hasn't started yet
+
+            end_date_str = t.get('end_date')
+            if end_date_str:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                if effective_date > end_date:
+                    continue  # Skip if it has already ended
 
             amount = Decimal(t['amount'])
             recurrence_months = t.get('recurrence_months', 1)
