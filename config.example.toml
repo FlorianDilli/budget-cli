@@ -64,7 +64,7 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │ List all your predictable income and expenses here. The app uses this to  │
 # │ calculate your "normalized monthly budget."                               │
 # │                                                                           │
-# │ - `description`: A clear name for the transaction.                        │
+# │ - `description`: Used to find matching transactions                       │
 # │ - `amount`: Use positive for income, negative for expenses.               │
 # │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
 # │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │

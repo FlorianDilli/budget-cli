@@ -107,7 +107,7 @@ def show_main_dashboard(engine: BudgetEngine):
 
     # Top 10 Spending View
 
-    top_spending_table = Table(title=f"[bold {theme['accent_color']}]Where does my money go in {latest_month}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'], show_lines=True)
+    top_spending_table = Table(title=f"[bold {theme['accent_color']}]Top 10 Transactions & Categories in {latest_month}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'], show_lines=True)
     top_spending_table.add_column("Name", style=theme['main_color'])
     top_spending_table.add_column("Amount", justify="right")
     top_spending_table.add_column("Type", style=theme['main_color'])
@@ -264,7 +264,7 @@ def show_history_view(engine: BudgetEngine):
         
         if top_spending_view:
 
-            top_spending_table = Table(title=f"[bold {engine.config['theme']['accent_color']}]Where does my money go in {month_title}[/bold {engine.config['theme']['accent_color']}]", expand=True, border_style=engine.config['theme']['main_color'], show_lines=True)
+            top_spending_table = Table(title=f"[bold {engine.config['theme']['accent_color']}]Top 10 Transactions & Categories in {month_title}[/bold {engine.config['theme']['accent_color']}]", expand=True, border_style=engine.config['theme']['main_color'], show_lines=True)
             top_spending_table.add_column("Name", style=engine.config['theme']['main_color'])
             top_spending_table.add_column("Amount", justify="right")
             top_spending_table.add_column("Type", style=engine.config['theme']['main_color'])
