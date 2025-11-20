@@ -45,7 +45,10 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [category_rules]                                                          │
 # │ Define keywords to automatically categorize your transactions.            │
-# │ The app scans the transaction's description (case-insensitive).           │
+# │ The app scans the transaction's description for the keywords you define.  │
+# │ The matching is case-insensitive and works if the keyword is part of the  │
+# │ description. For example, a keyword "supermarket" will match              │
+# │ "Local Supermarket" and "SUPERMARKET INC.".                               │
 # │ Format: "CategoryName" = ["keyword1", "keyword2", ...]                    │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [category_rules]
@@ -64,7 +67,10 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │ List all your predictable income and expenses here. The app uses this to  │
 # │ calculate your "normalized monthly budget."                               │
 # │                                                                           │
-# │ - `description`: Used to find matching transactions                       │
+# │ - `description`: A keyword used to identify transactions. A transaction   │
+# │   is marked as recurring if this keyword is found anywhere in its         │
+# │   description (case-insensitive). For example, "Spotify" will match       │
+# │   "PAYPAL *SPOTIFY*P3C321".                                               │
 # │ - `amount`: Use positive for income, negative for expenses.               │
 # │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
 # │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │

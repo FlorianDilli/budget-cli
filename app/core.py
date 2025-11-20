@@ -584,7 +584,7 @@ class BudgetEngine:
                 
                 # A transaction is recurring only if its description matches the list AND it has a valid recurrence config.
                 # This prevents an old, recurring transaction from causing a crash if its config is removed.
-                is_in_recurring_list = decrypted_desc.lower() in recurring_descriptions
+                is_in_recurring_list = any(rec_desc in decrypted_desc.lower() for rec_desc in recurring_descriptions)
                 new_is_recurring = 1 if is_in_recurring_list else 0
                 
                 recurring_changed = old_is_recurring != new_is_recurring

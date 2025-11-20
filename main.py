@@ -139,11 +139,11 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, th
     
     # --- Text for the progress bar ---
     if remaining_percent >= 0:
-        remaining_text = f" {remaining_percent_display:.1f}% remaining"
+        remaining_text = f" {remaining_percent_display:.0f}% remaining"
     else:
         # Over budget
         over_budget_percent = spent_percent
-        remaining_text = f" 0.0% remaining ({over_budget_percent:.1f}% of budget used)"
+        remaining_text = f" 0.0% remaining ({over_budget_percent:.0f}% of budget used)"
 
 
     bar_color = theme.get("positive", "green")
@@ -279,6 +279,7 @@ def show_history_view(engine: BudgetEngine):
             console.print(top_spending_table)
 
         # --- Full Transaction Table ---
+        console.print()
         trans_table = Table(title=f"[bold {theme['accent_color']}]All Transactions for {month_title}[/bold {theme['accent_color']}]", expand=True, border_style=theme['main_color'], show_lines=True)
         trans_table.add_column("Date", style="dim")
         trans_table.add_column("Description", style=engine.config['theme']['main_color'])
@@ -434,6 +435,16 @@ def main():
         try:
             with console.status("[bold green]Unlocking your budget...[/bold green]"):
                 engine = BudgetEngine(DB_PATH, password)
+            
+            # This is a bit of a hack, but we need to get the number of updated transactions
+            # from the engine after the startup categorization.
+            # We can't do this inside the engine itself, as it would require passing the console object.
+            
+            updated_count = engine.recategorize_transactions()
+            if updated_count > 0:
+                console.print(f"\n[bold green]Config updated! {updated_count} transactions were updated on startup.[/bold green]")
+
+
         except RuntimeError as e:
             if "Incorrect password" in str(e):
                 console.print(f"\n[bold {theme.get('negative', 'red')}]Wrong password, please try again.[/bold {theme.get('negative', 'red')}]\n")
