@@ -1,6 +1,6 @@
-# Minimal Budget CLI
+# Budget CLI
 
-Minimal Budget CLI is a simple command line interface (CLI) designed to help you track your finances. You can import your bank statements (CSV format) and based on the budget criteria you define, calculate how much budget is left for that month. All bank statements are encrypted after import and the app has no internet access.
+Budget CLI is a simple command line interface (CLI) designed to help you track your finances. You can import your bank statements (CSV format) and based on the budget criteria you define, calculate how much budget is left for that month. All bank statements are encrypted after import and the app has no internet access.
 
 ## 🚀 Prerequisites
 
@@ -14,7 +14,7 @@ You'll need Python to run the application.To check if you have python installed,
 
 ## 🛠️ Installation and Setup
 
-Follow these steps to get Minimal Budget CLI up and running on your system.
+Follow these steps to get Budget CLI up and running on your system.
 
 ### 📂 Step 1: Clone the Repository
 First, you need to clone the repository to your local machine. Open your terminal and run the following command in the directory where you want to store the application:

@@ -77,6 +77,10 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │   This is optional. If omitted, it's active from the beginning.           │
 # │ - `end_date`: The date the recurring transaction can end (YYYY-MM-DD).    │
 # │   Also optional. If omitted, it remains active indefinitely.              │
+# │                                                                           │
+# │ NOTE: The monthly budget, for both the dashboard and history views, is      │
+# │       calculated based on which recurring transactions are active on the    │
+# │       first day of the respective month.                                    │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 
 # --- Example Income ---

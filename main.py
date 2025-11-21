@@ -49,7 +49,7 @@ def show_password_prompt(is_initial_setup: bool = False, theme: dict = None) -> 
     console.print(
         Panel(
             Text(info_text, justify="center"),
-            title=f"[bold {theme['accent_color']}]Minimal Budget Tracker[/bold {theme['accent_color']}]",
+            title=f"[bold {theme['accent_color']}]Budget CLI[/bold {theme['accent_color']}]",
             border_style=theme['main_color']
         )
     )
@@ -83,7 +83,7 @@ def show_main_dashboard(engine: BudgetEngine):
     console.clear()
     
     # Header
-    console.print(Panel(f"[bold {theme['accent_color']}]Minimalist Budget Tracker[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
+    console.print(Panel(f"[bold {theme['accent_color']}]Budget CLI[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
     console.print()
     console.print()
 
@@ -186,7 +186,7 @@ def show_history_view(engine: BudgetEngine):
             console.clear()
             console.print(
                 Panel(
-                    f"[bold {engine.config['theme']['accent_color']}]Minimalist Budget Tracker[/bold {engine.config['theme']['accent_color']}]",
+                    f"[bold {engine.config['theme']['accent_color']}]Budget CLI[/bold {engine.config['theme']['accent_color']}]",
                     expand=False,
                     border_style=engine.config['theme']['main_color']
                 )
@@ -229,7 +229,7 @@ def show_history_view(engine: BudgetEngine):
         # --- Header ---
         console.print(
             Panel(
-                f"[bold {theme['accent_color']}]Minimalist Budget Tracker[/bold {theme['accent_color']}]",
+                f"[bold {theme['accent_color']}]Budget CLI[/bold {theme['accent_color']}]",
                 expand=False,
                 border_style=theme['main_color']
             )

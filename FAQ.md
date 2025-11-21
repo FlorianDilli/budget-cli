@@ -8,6 +8,12 @@ For example, if you have a recurring yearly subscription of $120, the applicatio
 
 The final "monthly budget" is the sum of all these normalized recurring transactions. This represents the amount of money you are expected to have available to spend each month after all regular income and expenses are accounted for.
 
+### Why does my budget in the history view change when I update my recurring transactions?
+
+The application calculates the budget for any given month—past or present—by looking at your `config.toml` and determining which recurring transactions were active on the **first day** of that specific month. It does not store a historical record of the budget itself.
+
+This means if you change the amount of a recurring transaction (e.g., your rent increases), the history for past months will be recalculated based on this new amount. To maintain accurate historical records, you should end the old transaction with an `end_date` and create a new one with a `start_date`.
+
 ### How is the "Available to Spend" amount calculated?
 
 Your "Available to Spend" amount starts with your total monthly budget (as calculated above). From this, the application subtracts all of your non-recurring transactions for the current month.
