@@ -20,19 +20,19 @@ Follow these steps to get Budget CLI up and running on your system.
 First, you need to clone the repository to your local machine. Open your terminal and run the following command in the directory where you want to store the application:
 
 ```bash
-git clone https://github.com/FlorianDilli/minimal-budget-cli.git
+git clone https://github.com/FlorianDilli/budget-cli.git
 ```
-This will create a `minimal-budget-cli` folder with the application files.
+This will create a `budget-cli` folder with the application files.
 
 ### 📦 Step 2: Install Dependencies
 1.  Open your terminal (or Command Prompt on Windows).
 2.  Navigate to the directory where you cloned the repository. For example:
     ```bash
     # On macOS or Linux
-    cd ~/Documents/minimal-budget-cli
+    cd ~/Documents/budget-cli
 
     # On Windows
-    cd C:\Users\YourUsername\Documents\minimal-budget-cli
+    cd C:\Users\YourUsername\Documents\budget-cli
     ```
 3.  Install the required Python packages by running:
     ```bash
