@@ -286,12 +286,14 @@ class BudgetEngine:
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
 
+        surplus = available_to_spend - normalized_monthly_flow
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
             "available_to_spend": available_to_spend,
             "currency": self.config['user']['currency_symbol'],
-            "latest_month": latest_month_str
+            "latest_month": latest_month_str,
+            "surplus": surplus
         }
 
     def get_monthly_summary(self, year: str, month: str) -> Dict[str, Any]:
@@ -331,12 +333,14 @@ class BudgetEngine:
         # --- New: Calculate the simple sum of all transactions for the month ---
         total_transactions_sum = sum(t['amount'] for t in decrypted_transactions)
 
+        surplus = available_to_spend - normalized_monthly_flow
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
             "available_to_spend": available_to_spend,
             "total_transactions_sum": total_transactions_sum,
-            "currency": self.config['user']['currency_symbol']
+            "currency": self.config['user']['currency_symbol'],
+            "surplus": surplus
         }
     def _get_category_from_rules(self, description: str) -> str:
         """Assigns a category based on keywords in the description."""
@@ -376,6 +380,10 @@ class BudgetEngine:
         if existing:
             return False  # Duplicate found
 
+        # Determine if recurring
+        recurring_descriptions = {trans['description'].lower() for trans in self._get_recurring_transactions()}
+        is_recurring = 1 if any(rec_desc in description.lower() for rec_desc in recurring_descriptions) else 0
+
         # Encrypt sensitive fields
         try:
             encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
@@ -389,10 +397,10 @@ class BudgetEngine:
         try:
             self.db.execute_query(
                 """
-                INSERT INTO transactions (transaction_date, description, amount, category, unique_hash)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO transactions (transaction_date, description, amount, category, unique_hash, is_recurring)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash)
+                (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash, is_recurring)
             )
             return True
         except Exception as e:

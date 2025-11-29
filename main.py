@@ -102,6 +102,8 @@ def show_main_dashboard(engine: BudgetEngine):
     show_budget_progress(
         summary['allowed_monthly_spend'],
         summary['available_to_spend'],
+        summary['surplus'],
+        summary['currency'],
         theme
     )
 
@@ -120,7 +122,7 @@ def show_main_dashboard(engine: BudgetEngine):
     console.print()
     console.print()
     console.print(top_spending_table)
-def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, theme: dict):
+def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict):
     """Renders a progress bar for the monthly budget."""
     
     if allowed_spend <= 0:
@@ -138,12 +140,14 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, th
 
     
     # --- Text for the progress bar ---
-    if remaining_percent >= 0:
+    if remaining_percent > 100:
+        remaining_text = f" 100% remaining ({surplus:.2f} {currency} surplus)"
+    elif remaining_percent >= 0:
         remaining_text = f" {remaining_percent_display:.0f}% remaining"
     else:
         # Over budget
         over_budget_percent = spent_percent
-        remaining_text = f" 0.0% remaining ({over_budget_percent:.0f}% of budget used)"
+        remaining_text = f" 0% remaining ({over_budget_percent:.0f}% of budget used)"
 
 
     bar_color = theme.get("positive", "green")
@@ -256,6 +260,8 @@ def show_history_view(engine: BudgetEngine):
         show_budget_progress(
             summary['allowed_monthly_spend'],
             summary['available_to_spend'],
+            summary['surplus'],
+            summary['currency'],
             theme
         )
 
