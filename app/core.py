@@ -40,7 +40,7 @@ class BudgetEngine:
                 # This is a fallback in case the example file is missing.
                 # Creates a minimal, functional config.
                 default_config = {
-                    "user": {"currency_symbol": "USD"},
+                    "user": {"currency_symbol": "USD", "round_amounts": False},
                     "theme": {
                         "accent_color": "#00FFFF", "positive": "#00FF00",
                         "negative": "#FF0000", "main_color": "#00FFFF",
@@ -59,6 +59,8 @@ class BudgetEngine:
                 shutil.copy(example_path, self.config_path)
         
         config = toml.load(self.config_path)
+        if "user" not in config:
+            config["user"] = {"currency_symbol": "USD", "round_amounts": False}
         # Ensure theme settings exist, providing defaults if they don't
         if "theme" not in config:
             config["theme"] = {
@@ -554,8 +556,18 @@ class BudgetEngine:
         # Step 1: Reload the configuration
         self.config = self._load_config()
         
-        # Step 2: Re-apply categorization rules
+        # Step 2: Re-apply user-specific settings
+        self.reapply_user_settings()
+        
+        # Step 3: Re-apply categorization rules
         return self.recategorize_transactions()
+
+    def reapply_user_settings(self) -> None:
+        """
+        Re-applies user-specific settings from the config file.
+        """
+        user_config = self.config.get("user", {})
+        self.db.set_meta("round_amounts", str(user_config.get("round_amounts", False)))
 
     def recategorize_transactions(self) -> int:
         """

@@ -16,6 +16,7 @@
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [user]
 currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
+round_amounts       = false    # If true, all amounts will be displayed as rounded values
 
 
 # ╭───────────────────────────────────────────────────────────────────────────╮

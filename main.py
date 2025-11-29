@@ -58,14 +58,20 @@ def show_password_prompt(is_initial_setup: bool = False, theme: dict = None) -> 
     password = getpass.getpass(prompt_message)
     return password
 
-def format_amount(amount: Decimal, currency: str, theme: dict, is_recurring: bool = False) -> Text:
+def format_amount(amount: Decimal, currency: str, theme: dict, round_amounts: bool, is_recurring: bool = False) -> Text:
     """Formats a transaction amount with appropriate color."""
     style = f"bold {theme['positive']}" if amount >= 0 else f"bold {theme['negative']}"
+    if round_amounts:
+        amount = round(amount)
+        return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
-def format_summary_amount(amount: Decimal, currency: str, theme: dict) -> Text:
+def format_summary_amount(amount: Decimal, currency: str, theme: dict, round_amounts: bool) -> Text:
     """Formats a summary amount with appropriate color."""
     style = f"bold {theme['positive']}" if amount >= 0 else f"bold {theme['negative']}"
+    if round_amounts:
+        amount = round(amount)
+        return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
 def show_main_dashboard(engine: BudgetEngine):
@@ -92,9 +98,9 @@ def show_main_dashboard(engine: BudgetEngine):
     summary_table.add_column(style=theme['main_color'])
     summary_table.add_column(style=f"bold {theme['positive']}", justify="right")
     
-    summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme))
-    summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme))
-    summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme))
+    summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
+    summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
+    summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
     
     console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {latest_month}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
     
@@ -104,7 +110,8 @@ def show_main_dashboard(engine: BudgetEngine):
         summary['available_to_spend'],
         summary['surplus'],
         summary['currency'],
-        theme
+        theme,
+        engine.config.get('user', {}).get('round_amounts', False)
     )
 
     # Top 10 Spending View
@@ -115,14 +122,14 @@ def show_main_dashboard(engine: BudgetEngine):
     top_spending_table.add_column("Type", style=theme['main_color'])
 
     for item in top_spending_view:
-        amount_text = format_amount(item['amount'], summary['currency'], theme, item.get('is_recurring', False))
+        amount_text = format_amount(item['amount'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False), item.get('is_recurring', False))
         name = f"[{theme.get('recurring_transaction_highlight', 'yellow')}]{item['name']}[/{theme.get('recurring_transaction_highlight', 'yellow')}]" if item.get('is_recurring') else item['name']
         top_spending_table.add_row(name, amount_text, item['type'])
         
     console.print()
     console.print()
     console.print(top_spending_table)
-def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict):
+def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict, round_amounts: bool):
     """Renders a progress bar for the monthly budget."""
     
     if allowed_spend <= 0:
@@ -141,7 +148,10 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
     
     # --- Text for the progress bar ---
     if remaining_percent > 100:
-        remaining_text = f" 100% remaining ({surplus:.2f} {currency} surplus)"
+        if round_amounts:
+            remaining_text = f" 100% remaining ({surplus:.0f} {currency} surplus)"
+        else:
+            remaining_text = f" 100% remaining ({surplus:.2f} {currency} surplus)"
     elif remaining_percent >= 0:
         remaining_text = f" {remaining_percent_display:.0f}% remaining"
     else:
@@ -248,11 +258,11 @@ def show_history_view(engine: BudgetEngine):
         summary_table.add_column(style=theme['main_color'])
         summary_table.add_column(style=f"bold {theme['positive']}", justify="right")
         
-        summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme))
-        summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme))
-        summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme))
+        summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
+        summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
+        summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
         if 'total_transactions_sum' in summary:
-            summary_table.add_row("Sum of all transactions in month:", format_summary_amount(summary['total_transactions_sum'], summary['currency'], theme))
+            summary_table.add_row("Sum of all transactions in month:", format_summary_amount(summary['total_transactions_sum'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
         
         console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
 
@@ -262,7 +272,8 @@ def show_history_view(engine: BudgetEngine):
             summary['available_to_spend'],
             summary['surplus'],
             summary['currency'],
-            theme
+            theme,
+            engine.config.get('user', {}).get('round_amounts', False)
         )
 
         # --- Top 10 Spending View for the Month ---
@@ -276,7 +287,7 @@ def show_history_view(engine: BudgetEngine):
             top_spending_table.add_column("Type", style=engine.config['theme']['main_color'])
             
             for item in top_spending_view:
-                amount_text = format_amount(item['amount'], summary['currency'], engine.config['theme'], item.get('is_recurring', False))
+                amount_text = format_amount(item['amount'], summary['currency'], engine.config['theme'], engine.config.get('user', {}).get('round_amounts', False), item.get('is_recurring', False))
                 name = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{item['name']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if item.get('is_recurring') else item['name']
                 top_spending_table.add_row(name, amount_text, item['type'])
                 
@@ -296,7 +307,7 @@ def show_history_view(engine: BudgetEngine):
             console.print("[dim]No transactions for this month.[/dim]")
         else:
             for t in transactions:
-                amount_text = format_amount(t['amount'], summary['currency'], theme, t.get('is_recurring', False))
+                amount_text = format_amount(t['amount'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False), t.get('is_recurring', False))
                 description = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{t['description']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if t.get('is_recurring') else t['description']
                 category = t['category'] if t['category'] else "Uncategorized"
                 trans_table.add_row(t['date'], description, amount_text, category)
