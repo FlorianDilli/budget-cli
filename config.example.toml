@@ -22,12 +22,37 @@ round_amounts       = false    # If true, all amounts will be displayed as round
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [importer]                                                                │
 # │ Maps your bank's CSV column names to what the app expects.                │
-# │ Make sure these match the headers in your CSV statement exactly.          │
+# │ You can define multiple formats for different banks.                       │
+# │ The app will automatically detect the correct format based on the headers. │
+# │                                                                           │
+# │ Optional fields:                                                          │
+# │ - `delimiter`: The character separating columns (default: ",").            │
+# │ - `reference_column`: A fallback column if the description is empty.       │
+# │ - `date_format`: The format of the date column (e.g., "%d.%m.%Y").         │
+# │   Common codes: %d (day), %m (month), %Y (4-digit year), %y (2-digit year).│
+# │   Example: "31.12.2023" would be "%d.%m.%Y"                                │
+# │ - `decimal_separator`: The character for decimals (default: ".").          │
+# │ - `thousands_separator`: The character for thousands (default: none).      │
 # ╰───────────────────────────────────────────────────────────────────────────╯
-[importer]
+[[importer.formats]]
+name               = "N26"
 date_column        = "Value Date"
 description_column = "Partner Name"
+reference_column   = "Payment Reference"
 amount_column      = "Amount (EUR)"
+delimiter          = ","
+date_format        = "%Y.%m.%d"
+decimal_separator  = "."
+
+[[importer.formats]]
+name               = "GLS"
+date_column        = "Buchungstag"
+description_column = "Name Zahlungsbeteiligter"
+reference_column   = "Verwendungszweck"
+amount_column      = "Betrag"
+delimiter          = ";"
+date_format        = "%d.%m.%Y"
+decimal_separator  = ","
 
 
 # ╭───────────────────────────────────────────────────────────────────────────╮

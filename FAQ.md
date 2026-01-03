@@ -39,15 +39,28 @@ You have two options for deleting your data, both available under the "Delete Da
 
 If transactions are not imported correctly, it is usually due to one of the following reasons:
 
-1.  **Incorrect column names**: The importer expects specific column names for the date, description, and amount. You can configure these in your `config.toml` file to match the headers in your CSV file. For example:
+1.  **Incorrect column names or delimiter**: The importer expects specific column names for the date, description, and amount. You can configure multiple formats in your `config.toml` file to match the headers in your CSV files. The app will automatically detect the correct format. For example:
     ```toml
-    [importer]
+    [[importer.formats]]
+    name = "My Bank"
     date_column = "Transaction Date"
     description_column = "Details"
     amount_column = "Value"
+    delimiter = ","
+    date_format = "%d.%m.%Y"
+    decimal_separator = ","
+    thousands_separator = "."
     ```
 
-2.  **Unsupported date format**: The importer recognizes common date formats like `YYYY-MM-DD`, `MM/DD/YYYY`, and `DD-MM-YYYY`. If your bank uses a different format, you may need to edit the CSV file before importing.
+2.  **Unsupported date format**: The importer recognizes common date formats like `YYYY-MM-DD`, `MM/DD/YYYY`, `DD-MM-YYYY`, and `DD.MM.YYYY`. If your bank uses a different format, you can specify it in your `config.toml` using the `date_format` option.
+    
+    You use special codes to describe the date:
+    - `%d`: Day of the month (e.g., 01 to 31)
+    - `%m`: Month (e.g., 01 to 12)
+    - `%Y`: 4-digit year (e.g., 2023)
+    - `%y`: 2-digit year (e.g., 23)
+    
+    **Example**: If your bank uses `31/12/2023`, your `date_format` would be `%d/%m/%Y`.
 
 3.  **File Location**: Make sure your bank statement CSV file is placed inside the `data/statements` directory. The importer only looks for files in this location.
 

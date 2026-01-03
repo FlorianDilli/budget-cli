@@ -47,8 +47,14 @@ class BudgetEngine:
                         "recurring_transaction_highlight": "#E2B59A"
                     },
                     "importer": {
-                        "date_column": "Date", "description_column": "Description",
-                        "amount_column": "Amount"
+                        "formats": [
+                            {
+                                "name": "Default",
+                                "date_column": "Date",
+                                "description_column": "Description",
+                                "amount_column": "Amount"
+                            }
+                        ]
                     },
                     "category_rules": {},
                     "recurring_transactions": []
@@ -69,6 +75,47 @@ class BudgetEngine:
                 "negative": "#FF0000",
                 "main_color": "#00FFFF"
             }
+
+        # Backward compatibility and migration for importer config
+        if "importer" in config:
+            if "formats" not in config["importer"]:
+                # Migrate old single-format config to new multi-format structure
+                old_importer = config["importer"]
+                if all(k in old_importer for k in ["date_column", "description_column", "amount_column"]):
+                    config["importer"] = {
+                        "formats": [
+                            {
+                                "name": "Migrated Format",
+                                "date_column": old_importer["date_column"],
+                                "description_column": old_importer["description_column"],
+                                "amount_column": old_importer["amount_column"]
+                            }
+                        ]
+                    }
+                else:
+                    # If it's broken, set a default
+                    config["importer"] = {
+                        "formats": [
+                            {
+                                "name": "Default",
+                                "date_column": "Date",
+                                "description_column": "Description",
+                                "amount_column": "Amount"
+                            }
+                        ]
+                    }
+        else:
+            config["importer"] = {
+                "formats": [
+                    {
+                        "name": "Default",
+                        "date_column": "Date",
+                        "description_column": "Description",
+                        "amount_column": "Amount"
+                    }
+                ]
+            }
+
         return config
 
     def _connect_to_db(self) -> None:
