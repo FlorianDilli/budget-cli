@@ -24,6 +24,21 @@ For example, if your monthly budget is $1000 and you spend $50 on groceries and 
 
 Any recurring transactions that have a different amount than what is defined in your `config.toml` will also be factored in. For instance, if your electricity bill is usually $50 but was $60 this month, the $10 difference will be subtracted from your available balance.
 
+### How are annual or non-monthly payments handled?
+
+If you have a recurring transaction that occurs less than once a month (e.g., `recurrence_months = 12`), the app automatically spreads the cost across the year. This means 1/12 of the amount is deducted from your budget every month.
+
+When the actual large transaction occurs (e.g., you pay the full $120 in January), the app detects it and **ignores it** in the "Available to Spend" calculation. This prevents the full amount from being deducted again, as you've already "saved" for it throughout the year.
+
+### What are "Budget Alerts"?
+
+Budget Alerts appear when the app detects an anomaly in your recurring transactions:
+*   **Amount Mismatch**: You paid more or less than what you defined in `config.toml`.
+*   **Wrong Month**: You made a payment in a month where it wasn't expected (requires `payment_month` to be set).
+*   **Missing Payment**: An expected payment (defined via `payment_month`) was not found in your transactions.
+
+You can configure when these payments are expected by adding `payment_month` (e.g., `1` for January or `[1, 7]` for bi-annual) to your recurring transactions in `config.toml`.
+
 ### Is my data secure?
 
 All the transactions you import via CSV files are encrypted and stored locally on your computer in a file called `budget.db`. The application uses strong encryption (AES-GCM) and requires your password to decrypt the data every time you open it. Your password is not stored anywhere in the application; it is used to generate an encryption key in memory. This means that without your password, your financial data is unreadable.

@@ -184,7 +184,7 @@ class DatabaseManager:
             if self.conn:
                 self.conn.row_factory = original_factory
 
-    def get_transactions(self, limit: int = None, year: str = None, month: str = None) -> List[Any]:
+    def get_transactions(self, limit: int = None, year: str = None, month: str = None, sort_order: str = "DESC") -> List[Any]:
         """
         Fetches transactions with flexible filtering.
         - If limit is set, returns the most recent N transactions.
@@ -203,7 +203,7 @@ class DatabaseManager:
             query += " WHERE strftime('%Y', transaction_date) = ? AND strftime('%m', transaction_date) = ?"
             params.extend([year, month])
         
-        query += " ORDER BY transaction_date DESC, id DESC"
+        query += f" ORDER BY transaction_date {sort_order}, id {sort_order}"
 
         if limit:
             query += " LIMIT ?"

@@ -99,6 +99,14 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │   "PAYPAL *SPOTIFY*P3C321".                                               │
 # │ - `amount`: Use positive for income, negative for expenses.               │
 # │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
+# │ - `payment_month`: For non-monthly payments (recurrence_months > 1),      │
+# │   specify the month(s) when the payment actually occurs.                  │
+# │   Can be a single integer (e.g., 1 for Jan) or a list (e.g., [1, 7]).     │
+# │                                                                           │
+# │   TIP: If you leave `payment_month` out, the app will still detect the    │
+# │   transaction and prevent it from being deducted twice, but it won't be   │
+# │   able to warn you if the payment is missing or happens in the wrong month.│
+# │                                                                           │
 # │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │
 # │   This is optional. If omitted, it's active from the beginning.           │
 # │ - `end_date`: The date the recurring transaction can end (YYYY-MM-DD).    │
@@ -122,5 +130,6 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # description       = "Car Insurance"
 # amount            = -240.00
 # recurrence_months = 12
+# payment_month     = 1  # January
 # start_date        = "2023-01-01"
 # end_date          = "2023-12-31"

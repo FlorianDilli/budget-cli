@@ -104,6 +104,15 @@ def show_main_dashboard(engine: BudgetEngine):
     
     console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {latest_month}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
     
+    # --- Alerts Panel ---
+    if summary.get('alerts'):
+        alert_table = Table(show_header=False, box=None, padding=(0, 1))
+        alert_table.add_column(style="bold yellow")
+        for alert in summary['alerts']:
+            alert_table.add_row(f"⚠ {alert}")
+        
+        console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
+
     # Show the progress bar
     show_budget_progress(
         summary['allowed_monthly_spend'],
@@ -156,8 +165,8 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
         remaining_text = f" {remaining_percent_display:.0f}% remaining"
     else:
         # Over budget
-        over_budget_percent = spent_percent
-        remaining_text = f" 0% remaining ({over_budget_percent:.0f}% of budget used)"
+        usage_factor = spent_percent / 100
+        remaining_text = f" 0% remaining ({usage_factor:.1f}x of budget used)"
 
 
     bar_color = theme.get("positive", "green")
@@ -266,6 +275,15 @@ def show_history_view(engine: BudgetEngine):
         
         console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
 
+        # --- Alerts Panel ---
+        if summary.get('alerts'):
+            alert_table = Table(show_header=False, box=None, padding=(0, 1))
+            alert_table.add_column(style="bold yellow")
+            for alert in summary['alerts']:
+                alert_table.add_row(f"⚠ {alert}")
+            
+            console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
+
         # --- Progress Bar ---
         show_budget_progress(
             summary['allowed_monthly_spend'],
@@ -302,6 +320,7 @@ def show_history_view(engine: BudgetEngine):
         trans_table.add_column("Description", style=engine.config['theme']['main_color'])
         trans_table.add_column("Amount", justify="right")
         trans_table.add_column("Category", style=engine.config['theme']['main_color'])
+        trans_table.add_column("Status", justify="center")
 
         if not transactions:
             console.print("[dim]No transactions for this month.[/dim]")
@@ -310,7 +329,17 @@ def show_history_view(engine: BudgetEngine):
                 amount_text = format_amount(t['amount'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False), t.get('is_recurring', False))
                 description = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{t['description']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if t.get('is_recurring') else t['description']
                 category = t['category'] if t['category'] else "Uncategorized"
-                trans_table.add_row(t['date'], description, amount_text, category)
+                
+                status = ""
+                error_code = t.get('error_code')
+                if error_code == "AMOUNT_MISMATCH":
+                    status = "[bold red]⚠ Mismatch[/bold red]"
+                elif error_code == "WRONG_MONTH":
+                    status = "[bold yellow]⚠ Wrong Month[/bold yellow]"
+                elif error_code == "ANNUAL_MATCH":
+                    status = "[green]✔ Verified[/green]"
+
+                trans_table.add_row(t['date'], description, amount_text, category, status)
             console.print(trans_table)
 
         # Wait for user to continue
