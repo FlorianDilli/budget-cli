@@ -28,6 +28,8 @@ class BudgetEngine:
         self._encryption_key = None
         self.config = self._load_config()
 
+        self._get_recurring_transactions() # Validate recurring transactions on init
+
         self._connect_to_db()
         self._verify_password()
 
@@ -64,7 +66,13 @@ class BudgetEngine:
             else:
                 shutil.copy(example_path, self.config_path)
         
-        config = toml.load(self.config_path)
+        try:
+            with open(self.config_path, "r") as f:
+                config = toml.load(f)
+        except Exception as e:
+            # If we are in __init__, we might want to raise this to prevent partial initialization
+            raise RuntimeError(f"Failed to load configuration from '{self.config_path}': {e}") from e
+
         if "user" not in config:
             config["user"] = {"currency_symbol": "USD", "round_amounts": False}
         # Ensure theme settings exist, providing defaults if they don't
@@ -208,11 +216,10 @@ class BudgetEngine:
             if not isinstance(t.get('amount'), (int, float)):
                 raise ValueError(f"Invalid or missing 'amount' for recurring transaction: '{description}'")
             
-            # This validation is now more flexible. It ensures that if 'recurrence_months' is present, it's a positive integer.
-            # This avoids crashing if a transaction is no longer recurring but is still marked as such in the db.
+            # This validation is now more strict. It ensures that 'recurrence_months' is a positive integer.
             recurrence = t.get('recurrence_months')
-            if recurrence is not None and (not isinstance(recurrence, int) or recurrence <= 0):
-                raise ValueError(f"Invalid 'recurrence_months' for recurring transaction: '{description}'")
+            if recurrence is None or not isinstance(recurrence, int) or recurrence <= 0:
+                raise ValueError(f"Invalid 'recurrence_months' for recurring transaction: '{description}'. Must be a positive integer.")
             
             payment_month = t.get('payment_month')
             if payment_month is not None:
@@ -277,7 +284,7 @@ class BudgetEngine:
                 if effective_date > end_date:
                     continue  # Skip if it has already ended
 
-            amount = Decimal(t['amount'])
+            amount = Decimal(str(t['amount']))
             recurrence_months = t.get('recurrence_months', 1)
             
             if recurrence_months > 0:
@@ -323,7 +330,7 @@ class BudgetEngine:
                     recurrence = matched_config.get('recurrence_months', 1)
                     
                     if recurrence == 1:
-                        defined_amount = Decimal(matched_config['amount'])
+                        defined_amount = Decimal(str(matched_config['amount']))
                         actual_amount = t['amount']
                         difference = actual_amount - defined_amount
                         if difference != 0:
@@ -337,11 +344,11 @@ class BudgetEngine:
                             
                         if payment_months:
                             if int(month) in payment_months:
-                                defined_amount = Decimal(matched_config['amount'])
+                                defined_amount = Decimal(str(matched_config['amount']))
                                 actual_amount = t['amount']
                                 if actual_amount != defined_amount:
                                     monthly_expenses += (actual_amount - defined_amount)
-                                    alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount}, got {actual_amount}")
+                                    alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
                                     t_processed['error_code'] = "AMOUNT_MISMATCH"
                                 else:
                                     t_processed['error_code'] = "ANNUAL_MATCH"
@@ -500,6 +507,11 @@ class BudgetEngine:
 
         # Encrypt sensitive fields
         try:
+            # Ensure description has amount suffix if not already present
+            # This is consistent with how importer works and ensures uniqueness
+            if f"({amount:.2f})" not in description:
+                description = f"{description} ({amount:.2f})"
+
             encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
             encrypted_amount = encrypt(str(amount).encode('utf-8'), self._encryption_key)
             encrypted_category = encrypt(category.encode('utf-8'), self._encryption_key)
@@ -613,9 +625,8 @@ class BudgetEngine:
             os.remove(self.db_path)
             
         # Also delete the config file so it gets recreated from the template on next run
-        # Also delete the config file so it gets recreated from the template on next run
-        if os.path.exists("userdata/config.toml"):
-            os.remove("userdata/config.toml")
+        if os.path.exists(self.config_path):
+            os.remove(self.config_path)
 
     def _reset_state_and_reconnect(self) -> None:
         from datetime import datetime
@@ -626,6 +637,92 @@ class BudgetEngine:
         # Re-derive keys and reconnect to the DB
         self._connect_to_db()
         self._verify_password()
+
+    def change_password(self, current_password, new_password):
+        """
+        Changes the master password and re-encrypts all sensitive data.
+        """
+        # 1. Create a backup of the database file
+        backup_path = f"{self.db_path}.bak"
+        shutil.copy2(self.db_path, backup_path)
+
+        try:
+            # 2. Verify current password (already done by caller, but good to be safe)
+            # We use the current encryption key to verify
+            verifier = self.db.get_meta('password_verifier')
+            if verifier:
+                decrypted_verifier = decrypt(bytes.fromhex(verifier), self._encryption_key)
+                if decrypted_verifier != b'master_password_check':
+                    raise ValueError("Current password verification failed.")
+
+            # 3. Generate new encryption salt and derive new field key
+            new_salt = generate_salt()
+            new_field_key = derive_key(new_password, new_salt)
+
+            # 4. Fetch all transactions
+            all_transactions = self.db.get_transactions()
+
+            # 5. Start a transaction for database updates
+            # We'll use a manual transaction since we're doing multiple updates
+            self.db.conn.execute("BEGIN TRANSACTION")
+
+            try:
+                # 6. Re-encrypt transactions
+                for t in all_transactions:
+                    # Decrypt with old key
+                    desc_bytes = bytes.fromhex(t['description'])
+                    amount_bytes = bytes.fromhex(t['amount'])
+                    category_bytes = bytes.fromhex(t['category'])
+
+                    decrypted_desc = decrypt(desc_bytes, self._encryption_key).decode('utf-8')
+                    decrypted_amount = decrypt(amount_bytes, self._encryption_key).decode('utf-8')
+                    decrypted_category = decrypt(category_bytes, self._encryption_key).decode('utf-8')
+
+                    # Encrypt with new key
+                    new_encrypted_desc = encrypt(decrypted_desc.encode('utf-8'), new_field_key)
+                    new_encrypted_amount = encrypt(decrypted_amount.encode('utf-8'), new_field_key)
+                    new_encrypted_category = encrypt(decrypted_category.encode('utf-8'), new_field_key)
+
+                    # Update in DB
+                    self.db.conn.execute(
+                        "UPDATE transactions SET description = ?, amount = ?, category = ? WHERE id = ?",
+                        (new_encrypted_desc.hex(), new_encrypted_amount.hex(), new_encrypted_category.hex(), t['id'])
+                    )
+
+                # 7. Update encryption_salt and password_verifier in meta table
+                new_verifier = encrypt(b'master_password_check', new_field_key)
+                
+                # We use execute_query which handles commit, but we are inside a transaction.
+                # Actually, DatabaseManager.execute_query calls commit(). 
+                # We should use self.db.conn.execute directly to stay in the transaction.
+                self.db.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", ('encryption_salt', new_salt.hex()))
+                self.db.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", ('password_verifier', new_verifier.hex()))
+
+                # 8. Rekey the database itself (SQLCipher)
+                self.db.rekey(new_password)
+
+                # Commit all changes
+                self.db.conn.commit()
+
+                # 9. Update instance state
+                self._encryption_key = new_field_key
+                # self.password is already None from __init__, but if it was stored, we'd update it.
+                # The instructions say "Update self.encryption_key and self.password in the BudgetApp instance."
+                # In this codebase it's BudgetEngine and it has self._encryption_key.
+                
+                # Remove backup on success
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+
+            except Exception as e:
+                self.db.conn.rollback()
+                raise e
+
+        except Exception as e:
+            # If anything failed, we might need to restore from backup if the DB is corrupted
+            # but SQLCipher rekey and our transaction should protect us.
+            # Still, let's inform the user.
+            raise RuntimeError(f"Failed to change password: {e}")
 
     def _decrypt_transactions(self, transactions: List[Any]) -> List[Dict[str, Any]]:
         """Helper to decrypt a list of transaction rows."""

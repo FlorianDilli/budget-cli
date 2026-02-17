@@ -265,3 +265,22 @@ class DatabaseManager:
         if self.conn:
             self.conn.close()
             self.conn = None
+
+    def rekey(self, new_password: str) -> None:
+        """
+        Changes the encryption key of the database.
+
+        Args:
+            new_password: The new key for the database.
+        """
+        if not self.conn:
+            raise RuntimeError("Database connection not established.")
+        
+        if not isinstance(new_password, str) or not new_password:
+            raise ValueError("A valid new password must be provided.")
+
+        try:
+            # SQLCipher command to change the key
+            self.conn.execute(f"PRAGMA rekey = '{new_password}'")
+        except sqlite3.Error as e:
+            raise RuntimeError(f"Failed to rekey database: {e}")

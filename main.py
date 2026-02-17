@@ -449,6 +449,41 @@ def show_delete_data_view(engine: BudgetEngine):
         return
 
 
+def show_change_password_view(engine: BudgetEngine):
+    """Handles the UI for changing the master password."""
+    console.clear()
+    theme = engine.config.get("theme", {})
+    console.print(Panel(f"[bold {theme['accent_color']}]Change Master Password[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
+    console.print()
+    console.print("Changing your password will re-encrypt all your data.")
+    console.print("A backup of your database will be created automatically.")
+    console.print()
+
+    current_password = getpass.getpass("Enter current password: ")
+    new_password = getpass.getpass("Enter new password: ")
+    confirm_password = getpass.getpass("Confirm new password: ")
+
+    if new_password != confirm_password:
+        console.print(f"\n[bold {theme.get('negative', 'red')}]Error: New passwords do not match.[/bold {theme.get('negative', 'red')}]")
+        Prompt.ask("\nPress Enter to return.")
+        return
+
+    if not new_password:
+        console.print(f"\n[bold {theme.get('negative', 'red')}]Error: Password cannot be empty.[/bold {theme.get('negative', 'red')}]")
+        Prompt.ask("\nPress Enter to return.")
+        return
+
+    if Confirm.ask("\nAre you sure you want to change your password?"):
+        try:
+            with console.status("[bold green]Changing password and re-encrypting data...[/bold green]"):
+                engine.change_password(current_password, new_password)
+            console.print(f"\n[bold green]Password changed successfully![/bold green]")
+        except Exception as e:
+            console.print(f"\n[bold {theme.get('negative', 'red')}]Error changing password:[/bold {theme.get('negative', 'red')}] {e}")
+    
+    Prompt.ask("\nPress Enter to return to the main menu.")
+
+
 def main():
     """The main entry point of the application."""
     
@@ -510,6 +545,7 @@ def main():
             "View History",
             "Import Statements",
             "Apply changes made in config.toml",
+            "Change Master Password",
             "Delete Data",
             "Exit"
         ]
@@ -529,11 +565,13 @@ def main():
             console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated.[/bold green]")
             Prompt.ask("\nPress Enter to return to the main menu.")
         elif menu_index == 3:
+            show_change_password_view(engine)
+        elif menu_index == 4:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
                 clear_terminal_full()
                 break
-        elif menu_index == 4 or menu_index is None:
+        elif menu_index == 5 or menu_index is None:
             clear_terminal_full()
             break
 
