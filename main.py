@@ -104,15 +104,6 @@ def show_main_dashboard(engine: BudgetEngine):
     
     console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {latest_month}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
     
-    # --- Alerts Panel ---
-    if summary.get('alerts'):
-        alert_table = Table(show_header=False, box=None, padding=(0, 1))
-        alert_table.add_column(style="bold yellow")
-        for alert in summary['alerts']:
-            alert_table.add_row(f"⚠ {alert}")
-        
-        console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
-
     # Show the progress bar
     show_budget_progress(
         summary['allowed_monthly_spend'],
@@ -122,6 +113,17 @@ def show_main_dashboard(engine: BudgetEngine):
         theme,
         engine.config.get('user', {}).get('round_amounts', False)
     )
+
+    # --- Alerts Panel ---
+    if summary.get('alerts'):
+        console.print()
+        console.print()
+        alert_table = Table(show_header=False, box=None, padding=(0, 1))
+        alert_table.add_column(style="bold yellow")
+        for alert in summary['alerts']:
+            alert_table.add_row(f"⚠ {alert}")
+        
+        console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
 
     # Top 10 Spending View
 
@@ -275,15 +277,6 @@ def show_history_view(engine: BudgetEngine):
         
         console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
 
-        # --- Alerts Panel ---
-        if summary.get('alerts'):
-            alert_table = Table(show_header=False, box=None, padding=(0, 1))
-            alert_table.add_column(style="bold yellow")
-            for alert in summary['alerts']:
-                alert_table.add_row(f"⚠ {alert}")
-            
-            console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
-
         # --- Progress Bar ---
         show_budget_progress(
             summary['allowed_monthly_spend'],
@@ -293,6 +286,17 @@ def show_history_view(engine: BudgetEngine):
             theme,
             engine.config.get('user', {}).get('round_amounts', False)
         )
+
+        # --- Alerts Panel ---
+        if summary.get('alerts'):
+            console.print()
+            console.print()
+            alert_table = Table(show_header=False, box=None, padding=(0, 1))
+            alert_table.add_column(style="bold yellow")
+            for alert in summary['alerts']:
+                alert_table.add_row(f"⚠ {alert}")
+            
+            console.print(Panel(alert_table, title=f"[bold yellow]Budget Alerts[/bold yellow]", expand=False, border_style="yellow"), justify="center")
 
         # --- Top 10 Spending View for the Month ---
         top_spending_view = engine.get_top_spending_for_month(year, month, limit=10)
@@ -562,7 +566,8 @@ def main():
         elif menu_index == 2:
             with console.status("[bold green]Reloading config and re-applying rules...[/bold green]"):
                 updated_count = engine.reload_config_and_reapply_all()
-            console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated.[/bold green]")
+            console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated in the database.[/bold green]")
+            console.print("[dim]Note: Transaction statuses (Mismatch/Verified) are also refreshed based on your new config.[/dim]")
             Prompt.ask("\nPress Enter to return to the main menu.")
         elif menu_index == 3:
             show_change_password_view(engine)
