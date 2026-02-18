@@ -317,13 +317,40 @@ class BudgetEngine:
                 matched_config = None
                 matched_index = -1
                 
-                # We need to find the config that triggered is_recurring=1
-                # Assuming the same logic as add_expense: substring match
+                # Find all potential matches based on description
+                potential_matches = []
                 for i, rt in enumerate(recurring_transactions):
                     if rt['description'].lower() in desc_lower:
-                        matched_config = rt
-                        matched_index = i
-                        break 
+                        potential_matches.append((i, rt))
+                
+                if potential_matches:
+                    # Smart Matching: Find the best fit among potential matches
+                    # Priority 1: Match both amount and month
+                    for i, rt in potential_matches:
+                        rt_amount = Decimal(str(rt['amount']))
+                        rt_months = rt.get('payment_month')
+                        if isinstance(rt_months, int):
+                            rt_months = [rt_months]
+                        
+                        amount_matches = (t['amount'] == rt_amount)
+                        month_matches = (not rt_months or int(month) in rt_months)
+                        
+                        if amount_matches and month_matches:
+                            matched_config = rt
+                            matched_index = i
+                            break
+                    
+                    # Priority 2: Match just amount
+                    if not matched_config:
+                        for i, rt in potential_matches:
+                            if t['amount'] == Decimal(str(rt['amount'])):
+                                matched_config = rt
+                                matched_index = i
+                                break
+                    
+                    # Priority 3: Fallback to the first description match
+                    if not matched_config:
+                        matched_index, matched_config = potential_matches[0]
                 
                 if matched_config:
                     matched_recurring_indices.add(matched_index)
@@ -335,6 +362,8 @@ class BudgetEngine:
                         difference = actual_amount - defined_amount
                         if difference != 0:
                             monthly_expenses += difference
+                            alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
+                            t_processed['error_code'] = "AMOUNT_MISMATCH"
                     else:
                         # Annual/Recurring > 1
                         payment_months = matched_config.get('payment_month')
@@ -507,11 +536,6 @@ class BudgetEngine:
 
         # Encrypt sensitive fields
         try:
-            # Ensure description has amount suffix if not already present
-            # This is consistent with how importer works and ensures uniqueness
-            if f"({amount:.2f})" not in description:
-                description = f"{description} ({amount:.2f})"
-
             encrypted_desc = encrypt(description.encode('utf-8'), self._encryption_key)
             encrypted_amount = encrypt(str(amount).encode('utf-8'), self._encryption_key)
             encrypted_category = encrypt(category.encode('utf-8'), self._encryption_key)

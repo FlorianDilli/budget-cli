@@ -167,10 +167,6 @@ def normalize_transaction(record: Dict[str, Any], format_config: Dict[str, Any],
         if not description:
             raise ValueError("No description or reference found in record.")
 
-        # Append amount to description to ensure uniqueness for recurring transactions
-        # especially when the bank doesn't provide a specific purpose/reference.
-        description = f"{description} ({amount:.2f})"
-
         # --- Apply Categorization Rules ---
         # The engine's logic is now the source of truth for categories
         category = engine._get_category_from_rules(description)
