@@ -17,8 +17,10 @@ from app.core import BudgetEngine
 from app.importer import discover_csv_files, import_transactions
 
 # --- Constants ---
-DB_PATH = "userdata/budget.db"
-STATEMENTS_DIR = "userdata/statements"
+USER_DATA_BASE = os.getenv("BUDGET_DATA_PATH", "userdata")
+DB_PATH = os.path.join(USER_DATA_BASE, "budget.db")
+STATEMENTS_DIR = os.path.join(USER_DATA_BASE, "statements")
+CONFIG_PATH = os.path.join(USER_DATA_BASE, "config.toml")
 
 # --- TUI components ---
 console = Console()
@@ -337,10 +339,10 @@ def show_history_view(engine: BudgetEngine):
                 status = ""
                 error_code = t.get('error_code')
                 if error_code == "AMOUNT_MISMATCH":
-                    status = "[bold red]⚠ Mismatch[/bold red]"
+                    status = "[bold red]⚠ Amount Mismatch[/bold red]"
                 elif error_code == "WRONG_MONTH":
                     status = "[bold yellow]⚠ Wrong Month[/bold yellow]"
-                elif error_code == "ANNUAL_MATCH":
+                elif error_code == "VERIFIED":
                     status = "[green]✔ Verified[/green]"
 
                 trans_table.add_row(t['date'], description, amount_text, category, status)
@@ -492,7 +494,10 @@ def main():
     """The main entry point of the application."""
     
     # Ensure data directories exist (for DB, config, and statements)
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    if USER_DATA_BASE != "userdata":
+        console.print(f"[dim]Using custom data path: {USER_DATA_BASE}[/dim]")
+    
+    os.makedirs(USER_DATA_BASE, exist_ok=True)
     os.makedirs(STATEMENTS_DIR, exist_ok=True)
     
     
@@ -505,7 +510,7 @@ def main():
         # Temporarily load config to get theme for password prompt
         temp_config = {}
         # Load the example config to get the default theme for the initial setup
-        config_path = "userdata/config.toml" if os.path.exists("userdata/config.toml") else "config.example.toml"
+        config_path = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "config.example.toml"
         
         try:
             import toml
@@ -519,7 +524,7 @@ def main():
         password = show_password_prompt(is_initial_setup, theme)
         try:
             with console.status("[bold green]Unlocking your budget...[/bold green]"):
-                engine = BudgetEngine(DB_PATH, password)
+                engine = BudgetEngine(DB_PATH, password, config_path=CONFIG_PATH)
             
             # This is a bit of a hack, but we need to get the number of updated transactions
             # from the engine after the startup categorization.
@@ -567,7 +572,7 @@ def main():
             with console.status("[bold green]Reloading config and re-applying rules...[/bold green]"):
                 updated_count = engine.reload_config_and_reapply_all()
             console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated in the database.[/bold green]")
-            console.print("[dim]Note: Transaction statuses (Mismatch/Verified) are also refreshed based on your new config.[/dim]")
+            console.print("[dim]Note: Transaction statuses (Amount Mismatch/Verified) are also refreshed based on your new config.[/dim]")
             Prompt.ask("\nPress Enter to return to the main menu.")
         elif menu_index == 3:
             show_change_password_view(engine)

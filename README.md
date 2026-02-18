@@ -39,11 +39,25 @@ This will create a `budget-cli` folder with the application files.
     pip install -r requirements.txt
     ```
 ### ▶️ Step 3: Run the Application
-Now you can run the application for the first time. In the same terminal window, run the following command:
+Now you can run the application. You need to set the `BUDGET_DATA_PATH` environment variable to specify where your data should be stored.
+
+In your terminal, run the following commands:
 
 ```bash
+# On macOS or Linux
+export BUDGET_DATA_PATH="/path/to/your/userdata"
+python main.py
+
+# On Windows (Command Prompt)
+set BUDGET_DATA_PATH="C:\path\to\your\userdata"
+python main.py
+
+# On Windows (PowerShell)
+$env:BUDGET_DATA_PATH="C:\path\to\your\userdata"
 python main.py
 ```
+
+Replace `/path/to/your/userdata` with the actual directory where you want Budget CLI to store its configuration and database.
 
 ## 🔄 Updating
 

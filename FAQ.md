@@ -82,13 +82,30 @@ If transactions are not imported correctly, it is usually due to one of the foll
 If you have fixed the configuration, you can delete the incorrectly imported month's data using the "Delete Data" menu and then try importing the CSV file again.
 ### How can I back up and restore my data?
 
-Since all your financial data is stored in the `userdate` folder, backing up and restoring is simple.
+Since all your financial data is stored in the `userdata` folder (or your custom data path), backing up and restoring is simple.
 
 **To back up your data:**
-1.  Locate the `userdata` folder in the main directory of the app.
+1.  Locate your data folder (default is `userdata` in the main directory).
 2.  Copy this folder to a secure location, such as an external hard drive, a USB stick, or a cloud storage service.
 
 **To restore your data:**
 1.  Make sure the application is closed.
-2.  Copy your backed-up `userdata` folder back into the application directory.
+2.  Copy your backed-up data folder back into the application directory (or your custom path).
 3.  The next time you open the application, it will load your restored data.
+
+### How can I keep my data private from AI agents?
+
+If you use AI agents (like GitHub Copilot, ChatGPT, or Kilo Code) to help you with this project, you might want to keep your financial data outside of the project directory so the AI cannot access it.
+
+1.  **Move your data**: Move your `userdata` folder to a location outside of the `budget-cli` directory (e.g., `~/Documents/my-budget-data`).
+2.  **Set an environment variable**: Before running the app, set the `BUDGET_DATA_PATH` environment variable:
+    ```bash
+    # Linux/macOS
+    export BUDGET_DATA_PATH="/home/user/Documents/my-budget-data"
+    python main.py
+
+    # Windows (PowerShell)
+    $env:BUDGET_DATA_PATH="C:\Users\User\Documents\my-budget-data"
+    python main.py
+    ```
+3.  **AI Safety**: Since the data is now outside the project workspace, AI agents will only see the application code and not your private financial records.

@@ -11,7 +11,7 @@ from app.crypto import derive_key, encrypt, decrypt, generate_salt
 class BudgetEngine:
     """Manages the application's core logic, state, and business rules."""
 
-    def __init__(self, db_path: str, password: str, config_path: str = "userdata/config.toml"):
+    def __init__(self, db_path: str, password: str, config_path: str = None):
         """
         Initializes the core engine.
 
@@ -22,7 +22,13 @@ class BudgetEngine:
         """
         self.db_path = db_path
         self.password = password
-        self.config_path = config_path
+        
+        # Default to userdata/config.toml if not provided, but respect environment variable if set in main.py
+        if config_path is None:
+            user_data_base = os.getenv("BUDGET_DATA_PATH", "userdata")
+            self.config_path = os.path.join(user_data_base, "config.toml")
+        else:
+            self.config_path = config_path
         
         self.db = DatabaseManager(self.db_path)
         self._encryption_key = None
@@ -305,6 +311,17 @@ class BudgetEngine:
         
         processed_transactions = []
 
+        # Pre-calculate which recurring configs have a perfect match in this month
+        # This is used for the "Smart Fallback" logic.
+        configs_with_perfect_match = set()
+        for t in transactions:
+            desc_lower = t['description'].lower()
+            for i, rt in enumerate(recurring_transactions):
+                if rt['description'].lower() in desc_lower:
+                    rt_amount = Decimal(str(rt['amount']))
+                    if t['amount'] == rt_amount:
+                        configs_with_perfect_match.add(i)
+
         for t in transactions:
             t_processed = t.copy()
             
@@ -349,8 +366,14 @@ class BudgetEngine:
                                 break
                     
                     # Priority 3: Fallback to the first description match
+                    # BUT: Only if there isn't a perfect match for this config elsewhere in the month.
+                    # This is the "Smart Fallback" logic.
                     if not matched_config:
-                        matched_index, matched_config = potential_matches[0]
+                        for i, rt in potential_matches:
+                            if i not in configs_with_perfect_match:
+                                matched_index = i
+                                matched_config = rt
+                                break
                 
                 if matched_config:
                     matched_recurring_indices.add(matched_index)
@@ -364,6 +387,8 @@ class BudgetEngine:
                             monthly_expenses += difference
                             alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
                             t_processed['error_code'] = "AMOUNT_MISMATCH"
+                        else:
+                            t_processed['error_code'] = "VERIFIED"
                     else:
                         # Annual/Recurring > 1
                         payment_months = matched_config.get('payment_month')
@@ -380,7 +405,7 @@ class BudgetEngine:
                                     alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
                                     t_processed['error_code'] = "AMOUNT_MISMATCH"
                                 else:
-                                    t_processed['error_code'] = "ANNUAL_MATCH"
+                                    t_processed['error_code'] = "VERIFIED"
                             else:
                                 # Wrong month - treat as full expense
                                 monthly_expenses += t['amount']
@@ -391,8 +416,9 @@ class BudgetEngine:
                              # No payment month defined, ignore (assume budgeted)
                              pass
                 else:
-                    # Fallback if no config matches
+                    # Fallback if no config matches (or if it was skipped by Smart Fallback)
                     monthly_expenses += t['amount']
+                    t_processed['is_recurring'] = False # Treat as non-recurring in the UI too
 
             processed_transactions.append(t_processed)
 
