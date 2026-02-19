@@ -113,7 +113,8 @@ def show_main_dashboard(engine: BudgetEngine):
         summary['surplus'],
         summary['currency'],
         theme,
-        engine.config.get('user', {}).get('round_amounts', False)
+        engine.config.get('user', {}).get('round_amounts', False),
+        summary.get('total_transactions_sum', Decimal('0'))
     )
 
     # --- Alerts Panel ---
@@ -142,17 +143,25 @@ def show_main_dashboard(engine: BudgetEngine):
     console.print()
     console.print()
     console.print(top_spending_table)
-def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict, round_amounts: bool):
+def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict, round_amounts: bool, total_spent: Decimal = None):
     """Renders a progress bar for the monthly budget."""
     
     if allowed_spend <= 0:
         remaining_percent = Decimal('0') if available_to_spend >= 0 else Decimal('-100')
         spent_percent = Decimal('100') if available_to_spend < 0 else Decimal('0')
+        usage_factor = float(abs(total_spent) / 1) if total_spent is not None and total_spent < 0 else 0.0
     else:
         remaining_percent = (available_to_spend / allowed_spend) * 100
         spent_percent = 100 - remaining_percent
+        
+        # The user wants to see how much of their budget they have spent.
+        # 'available_to_spend' is (Budget + Net Expenses).
+        # So (Budget - available_to_spend) is the Net Amount Spent.
+        net_spent = allowed_spend - available_to_spend
+        usage_factor = float(net_spent / allowed_spend)
 
     # For the progress bar, clamp the value between 0 and 100
+    # We use remaining_percent for the bar itself to show "how much is left"
     progress_display = max(0, min(remaining_percent, 100))
 
     # Text display can show the actual percentage
@@ -169,18 +178,20 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
         remaining_text = f" {remaining_percent_display:.0f}% remaining"
     else:
         # Over budget
-        usage_factor = spent_percent / 100
         remaining_text = f" 0% remaining ({usage_factor:.1f}x of budget used)"
 
 
-    bar_color = theme.get("positive", "green")
-    background_color = theme.get("negative", "red")
+    # Use the 'positive' color from theme, but default to a light green if not found
+    # The user likes the light green from the partial progress bar
+    bar_color = "#A1C398"
+    background_color = "grey37"
 
     progress_bar = ProgressBar(
         total=100,
         completed=progress_display,
         style=background_color,
         complete_style=bar_color,
+        finished_style=bar_color,
         width=50,
     )
 
@@ -286,7 +297,8 @@ def show_history_view(engine: BudgetEngine):
             summary['surplus'],
             summary['currency'],
             theme,
-            engine.config.get('user', {}).get('round_amounts', False)
+            engine.config.get('user', {}).get('round_amounts', False),
+            summary.get('total_transactions_sum', Decimal('0'))
         )
 
         # --- Alerts Panel ---
@@ -378,6 +390,91 @@ def run_importer(engine: BudgetEngine):
         
         console.print(f"\n[bold green]Import complete! Added {total_imported} new transactions.[/bold green]")
     
+    Prompt.ask("\nPress Enter to return to the main menu.")
+
+
+def show_monthly_overview(engine: BudgetEngine):
+    """Displays a summary table for all months with transactions."""
+    summaries = engine.get_all_months_summary()
+    theme = engine.config.get("theme", {})
+    round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+
+    console.clear()
+    console.print(Panel(f"[bold {theme['accent_color']}]Monthly Overview[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
+    console.print()
+
+    if not summaries:
+        console.print("[yellow]No transaction data found.[/yellow]")
+        Prompt.ask("\nPress Enter to return to the main menu.")
+        return
+
+    table = Table(expand=True, border_style=theme['main_color'], show_lines=True)
+    table.add_column("Month", style=theme['accent_color'])
+    table.add_column("Monthly Budget", justify="right")
+    table.add_column("Sum of all transactions", justify="right")
+    table.add_column("Available to Spend", justify="right")
+    table.add_column("How much budget is left")
+
+    for s in summaries:
+        month_title = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%B %Y")
+        
+        budget_text = format_summary_amount(s['budget'], s['currency'], theme, round_amounts)
+        spent_text = format_summary_amount(s['total_spent'], s['currency'], theme, round_amounts)
+        remaining_text = format_summary_amount(s['available'], s['currency'], theme, round_amounts)
+
+        # Calculate progress factor and display
+        # Logic aligned with show_budget_progress
+        if s['budget'] <= 0:
+            remaining_percent = Decimal('0') if s['available'] >= 0 else Decimal('-100')
+            usage_factor = float(abs(s['total_spent']) / 1) if s['total_spent'] < 0 else 0.0
+        else:
+            remaining_percent = (s['available'] / s['budget']) * 100
+            # Align with dashboard: usage is (Budget - Available) / Budget
+            net_spent = s['budget'] - s['available']
+            usage_factor = float(net_spent / s['budget'])
+        
+        # For the progress bar, clamp the value between 0 and 100
+        # Note: show_budget_progress shows REMAINING budget, so we do the same for consistency
+        progress_display = float(max(0, min(remaining_percent, 100)))
+
+        # Text display can show the actual percentage
+        remaining_percent_display = max(0, remaining_percent)
+
+        # --- Text for the progress bar ---
+        if remaining_percent > 100:
+            surplus = s['available']
+            if round_amounts:
+                progress_text = f" 100% remaining ({surplus:.0f} {s['currency']} surplus)"
+            else:
+                progress_text = f" 100% remaining ({surplus:.2f} {s['currency']} surplus)"
+        elif remaining_percent >= 0:
+            progress_text = f" {remaining_percent_display:.0f}% remaining"
+        else:
+            # Over budget
+            progress_text = f" 0% remaining ({usage_factor:.1f}x of budget used)"
+
+        # Use the 'positive' color from theme, but default to a light green if not found
+        # The user likes the light green from the partial progress bar
+        bar_color = "#A1C398"
+        # Use a neutral background for the progress bar to avoid "two greens" or "red/green" confusion
+        # when we want to show "how much is left"
+        background_color = "grey37"
+
+        progress_bar = ProgressBar(
+            total=100,
+            completed=progress_display,
+            style=background_color,
+            complete_style=bar_color,
+            finished_style=bar_color,
+            width=20,
+        )
+        
+        usage_grid = Table.grid(padding=(0, 1))
+        usage_grid.add_row(progress_bar, Text(progress_text, style=theme['main_color']))
+
+        table.add_row(month_title, budget_text, spent_text, remaining_text, usage_grid)
+
+    console.print(table)
     Prompt.ask("\nPress Enter to return to the main menu.")
 
 
@@ -552,6 +649,7 @@ def main():
         
         menu_items = [
             "View History",
+            "Monthly Overview",
             "Import Statements",
             "Apply changes made in config.toml",
             "Change Master Password",
@@ -567,21 +665,23 @@ def main():
         if menu_index == 0:
             show_history_view(engine)
         elif menu_index == 1:
-            run_importer(engine)
+            show_monthly_overview(engine)
         elif menu_index == 2:
+            run_importer(engine)
+        elif menu_index == 3:
             with console.status("[bold green]Reloading config and re-applying rules...[/bold green]"):
                 updated_count = engine.reload_config_and_reapply_all()
             console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated in the database.[/bold green]")
             console.print("[dim]Note: Transaction statuses (Amount Mismatch/Verified) are also refreshed based on your new config.[/dim]")
             Prompt.ask("\nPress Enter to return to the main menu.")
-        elif menu_index == 3:
-            show_change_password_view(engine)
         elif menu_index == 4:
+            show_change_password_view(engine)
+        elif menu_index == 5:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
                 clear_terminal_full()
                 break
-        elif menu_index == 5 or menu_index is None:
+        elif menu_index == 6 or menu_index is None:
             clear_terminal_full()
             break
 
