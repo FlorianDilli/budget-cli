@@ -476,11 +476,15 @@ class BudgetEngine:
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
 
+        # Calculate the simple sum of all transactions for the month
+        total_transactions_sum = sum(t['amount'] for t in decrypted_transactions)
+
         surplus = available_to_spend - normalized_monthly_flow
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
             "available_to_spend": available_to_spend,
+            "total_transactions_sum": total_transactions_sum,
             "currency": self.config['user']['currency_symbol'],
             "latest_month": latest_month_str,
             "surplus": surplus,
@@ -518,6 +522,27 @@ class BudgetEngine:
             "surplus": surplus,
             "alerts": alerts
         }
+
+    def get_all_months_summary(self) -> List[Dict[str, Any]]:
+        """
+        Calculates and returns a summary for all months with transactions.
+        """
+        available_months = self.get_available_months()
+        summaries = []
+        
+        for year, month in available_months:
+            summary = self.get_monthly_summary(year, month)
+            summaries.append({
+                "year": year,
+                "month": month,
+                "budget": summary['allowed_monthly_spend'],
+                "total_spent": summary['total_transactions_sum'],
+                "available": summary['available_to_spend'],
+                "currency": summary['currency']
+            })
+        
+        return summaries
+
     def _get_category_from_rules(self, description: str) -> str:
         """Assigns a category based on keywords in the description."""
         # Ensure 'category_rules' exists in the config, default to empty dict
