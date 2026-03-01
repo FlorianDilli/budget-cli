@@ -1,12 +1,12 @@
 import os
 import csv
 import shutil
-import hashlib
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
 from app.core import BudgetEngine
+from app.crypto import generate_transaction_hash
 
 def discover_csv_files(directory: str) -> List[str]:
     """
@@ -171,16 +171,11 @@ def normalize_transaction(record: Dict[str, Any], format_config: Dict[str, Any],
         # The engine's logic is now the source of truth for categories
         category = engine._get_category_from_rules(description)
 
-        # Create a unique hash for the transaction
-        unique_string = f"{normalized_date}-{description}-{amount}"
-        unique_hash = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
-
         return {
             "transaction_date": normalized_date,
             "description": description,
             "amount": amount,
-            "category": category,
-            "unique_hash": unique_hash
+            "category": category
         }
 
     except (InvalidOperation, ValueError) as e:
@@ -203,7 +198,7 @@ def delete_file(filepath: str, allowed_directory: str) -> None:
     except OSError as e:
         raise RuntimeError(f"Error deleting file {filepath}: {e}")
 
-def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> int:
+def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> Dict[str, Any]:
     """
     Full pipeline for importing transactions from a CSV file.
 
@@ -213,7 +208,13 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         import_dir: The directory where the csv file is located.
 
     Returns:
-        The number of new transactions successfully imported.
+        A dictionary containing the import results:
+        - 'filename': The name of the CSV file.
+        - 'format_name': The name of the detected format.
+        - 'imported_count': Number of new transactions successfully imported.
+        - 'skipped_count': Number of duplicates skipped.
+        - 'deleted': Boolean indicating if the source file was deleted.
+        - 'error': Error message if detection failed.
     """
     formats = engine.config.get('importer', {}).get('formats', [])
     
@@ -244,31 +245,59 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         except Exception:
             continue
 
+    filename = os.path.basename(csv_path)
     if not format_config:
         # Fallback: try to read with default comma just to show headers in error message
         try:
             _, headers = parse_csv(csv_path, delimiter=',')
         except Exception:
             headers = []
-        print(f"Error: Could not detect a matching format for '{os.path.basename(csv_path)}'.")
+        
+        error_msg = f"Could not detect a matching format for '{filename}'."
         if headers:
-            print(f"Available headers (with ',' delimiter): {', '.join(headers)}")
-        return 0
+            error_msg += f" Available headers (with ',' delimiter): {', '.join(headers)}"
+        
+        return {
+            "filename": filename,
+            "format_name": "Unknown",
+            "imported_count": 0,
+            "skipped_count": 0,
+            "deleted": False,
+            "error": error_msg
+        }
 
-    print(f"Detected format: {format_config.get('name', 'Unknown')}")
-
+    format_name = format_config.get('name', 'Unknown')
     new_transactions_count = 0
     skipped_transactions_count = 0  # To count duplicates
+    
+    # Track occurrences of identical transactions in this file
+    transaction_counts = {}
+
     for record in raw_records:
         try:
             normalized_record = normalize_transaction(record, format_config, engine)
             
+            # Create a tracking key
+            track_key = (
+                normalized_record['transaction_date'], 
+                normalized_record['description'], 
+                normalized_record['amount']
+            )
+            
+            # Get current count and increment
+            occurrence = transaction_counts.get(track_key, 0)
+            transaction_counts[track_key] = occurrence + 1
+            
+            # Generate the new hash with the occurrence counter
+            file_hash = generate_transaction_hash(track_key[0], track_key[1], track_key[2], occurrence)
+
             # The updated add_expense returns False for duplicates
             was_added = engine.add_expense(
                 date=normalized_record['transaction_date'],
                 description=normalized_record['description'],
                 amount=normalized_record['amount'],
-                category=normalized_record['category']
+                category=normalized_record['category'],
+                unique_hash=file_hash
             )
             
             if was_added:
@@ -277,28 +306,28 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
                 # This is now the specific check for a duplicate
                 skipped_transactions_count += 1
 
-        except ValueError as e:
+        except ValueError:
             # Catches normalization errors
-            print(f"Skipping record due to normalization error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
-        except RuntimeError as e:
+        except RuntimeError:
             # Catches database or encryption errors from the engine
-            print(f"Skipping record due to a critical error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
-
-    # After successful import, show a summary
-    print(f"\nImport Summary for '{os.path.basename(csv_path)}':")
-    print(f"  - Successfully imported: {new_transactions_count} transactions")
-    print(f"  - Skipped (duplicates): {skipped_transactions_count} transactions")
 
     # Finally, delete the imported CSV file
+    deleted = False
     try:
         # Pass the directory from the engine's config to ensure safe deletion
         delete_file(csv_path, import_dir)
-        print(f"  - Deleted source file: '{os.path.basename(csv_path)}'")
-    except RuntimeError as e:
-        print(f"  - Warning: Could not delete source file: {e}")
+        deleted = True
+    except RuntimeError:
+        pass
 
-    return new_transactions_count
+    return {
+        "filename": filename,
+        "format_name": format_name,
+        "imported_count": new_transactions_count,
+        "skipped_count": skipped_transactions_count,
+        "deleted": deleted
+    }

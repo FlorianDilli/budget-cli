@@ -12,6 +12,7 @@ from rich.progress_bar import ProgressBar
 from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt, Confirm
+from rich.rule import Rule
 
 from app.core import BudgetEngine
 from app.importer import discover_csv_files, import_transactions
@@ -376,18 +377,34 @@ def run_importer(engine: BudgetEngine):
         Prompt.ask("\nPress Enter to return to the main menu.")
         return
 
-    console.print("Found the following statement files:")
+    console.print(f"Found {len(csv_files)} statement files:")
     for f in csv_files:
-        console.print(f"- {os.path.basename(f)}")
+        console.print(f" • {os.path.basename(f)}")
     
     if Confirm.ask("\nDo you want to import these transactions?"):
         total_imported = 0
-        with console.status("[bold green]Importing...[/bold green]"):
-            for f in csv_files:
-                # The importer needs the full engine to handle encryption
-                count = import_transactions(engine, f, STATEMENTS_DIR)
-                total_imported += count
+        for f in csv_files:
+            # The importer needs the full engine to handle encryption
+            result = import_transactions(engine, f, STATEMENTS_DIR)
+            
+            console.print(Rule(style=engine.config['theme']['main_color']))
+            console.print(f"Processing: [bold]{result['filename']}[/bold]")
+            
+            if "error" in result:
+                console.print(f"[bold red]Error:[/bold red] {result['error']}")
+            else:
+                console.print(f"Format: [cyan]{result['format_name']}[/cyan] (Detected)")
+                console.print("\nImport Results:")
+                console.print(f"  [green]✔[/green]  {result['imported_count']} transactions imported")
+                console.print(f"  [yellow]•[/yellow]  {result['skipped_count']} duplicates skipped")
+                if result['deleted']:
+                    console.print(f"  [dim]🗑  Source file deleted[/dim]")
+                else:
+                    console.print(f"  [bold red]⚠  Could not delete source file[/bold red]")
+                
+                total_imported += result['imported_count']
         
+        console.print(Rule(style=engine.config['theme']['main_color']))
         console.print(f"\n[bold green]Import complete! Added {total_imported} new transactions.[/bold green]")
     
     Prompt.ask("\nPress Enter to return to the main menu.")

@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Dict, Any, List, Tuple
 
 from app.database import DatabaseManager
-from app.crypto import derive_key, encrypt, decrypt, generate_salt
+from app.crypto import derive_key, encrypt, decrypt, generate_salt, generate_transaction_hash
 
 class BudgetEngine:
     """Manages the application's core logic, state, and business rules."""
@@ -562,7 +562,7 @@ class BudgetEngine:
         # Default category if no rules match
         return "Uncategorized"
 
-    def add_expense(self, date: str, description: str, amount: float, category: str) -> bool:
+    def add_expense(self, date: str, description: str, amount: float, category: str, unique_hash: str = None) -> bool:
         """
         Adds a new expense to the database after checking for duplicates.
         Encrypts sensitive fields before storing.
@@ -570,11 +570,17 @@ class BudgetEngine:
         Returns:
             True if the transaction was added successfully, False otherwise.
         """
-        import hashlib
-
-        # Create a unique hash to prevent duplicates
-        unique_string = f"{date}-{description}-{amount}"
-        unique_hash = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
+        if not unique_hash:
+            # For manual entries: find how many identical transactions already exist on this date
+            transactions_on_date = self.db.get_transactions_for_period(date, date)
+            decrypted_transactions = self._decrypt_transactions(transactions_on_date)
+            
+            occurrence = 0
+            for t in decrypted_transactions:
+                if t['description'] == description and t['amount'] == Decimal(str(amount)):
+                    occurrence += 1
+                    
+            unique_hash = generate_transaction_hash(date, description, amount, occurrence)
 
         # Check for duplicates before inserting
         existing = self.db.fetch_all("SELECT 1 FROM transactions WHERE unique_hash = ?", (unique_hash,))
