@@ -370,54 +370,86 @@ def show_history_view(engine: BudgetEngine):
 def run_importer(engine: BudgetEngine):
     """Handles the logic for importing transactions from CSV files."""
     console.clear()
-    console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Import Transactions from Statements[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
-    console.print()
+    theme = engine.config['theme']
+
+    # Standard Header
+    console.print(Panel(f"[bold {theme['accent_color']}]Import Transactions[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
     console.print()
 
     csv_files = discover_csv_files(STATEMENTS_DIR)
     if not csv_files:
         console.print(f"[yellow]No CSV files found in '{STATEMENTS_DIR}'.[/yellow]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
         return
 
-    console.print(f"Found {len(csv_files)} statement files:")
+    # Selection Panel
+    file_list = ""
     for f in csv_files:
-        console.print(f" • {os.path.basename(f)}")
+        basename = os.path.basename(f)
+        if len(basename) > 40:
+            basename = basename[:37] + "..."
+        file_list += f" [yellow]●[/yellow] {basename}\n"
+
+    selection_content = f"\n [dim]Found {len(csv_files)} statement file{'s' if len(csv_files) > 1 else ''}[/dim]\n\n{file_list}"
     
-    if Confirm.ask("\nDo you want to import these transactions?"):
+    console.print(Panel(
+        selection_content,
+        title=f"[bold {theme['accent_color']}]Statement Detection[/bold {theme['accent_color']}]",
+        border_style=theme['main_color'],
+        expand=False,
+        padding=(0, 1)
+    ))
+
+    if Confirm.ask("\n [dim]Do you want to proceed with the import? [y/N][/dim]"):
         total_imported = 0
         for f in csv_files:
-            # The importer needs the full engine to handle encryption
             result = import_transactions(engine, f, STATEMENTS_DIR)
             
-            console.print(Rule(style=engine.config['theme']['main_color']))
-            console.print(f"Processing: [bold]{result['filename']}[/bold]")
+            console.print()
+            console.print(Rule(f"[bold] {result.get('filename', os.path.basename(f))} [/bold]", style=theme['main_color']))
             
             if "error" in result:
-                console.print(f"[bold red]Error:[/bold red] {result['error']}")
+                console.print(f" [bold red]Error:[/bold red] {result['error']}")
             else:
-                console.print(f"Format: [cyan]{result['format_name']}[/cyan] (Detected)")
+                console.print(f" [dim]Format detected:[/dim] [cyan]{result['format_name']}[/cyan]")
                 console.print()
 
-                results_table = Table(border_style=engine.config['theme']['main_color'], show_header=False, expand=False)
-                results_table.add_column(width=3)
-                results_table.add_column()
+                imported = result['imported_count']
+                skipped = result['skipped_count']
+                archived = result.get('archived', False)
 
-                results_table.add_row("[green]✔[/green]", f"[green]{result['imported_count']}[/green] transactions imported")
-                results_table.add_row("[yellow]•[/yellow]", f"{result['skipped_count']} duplicates skipped")
-                if result['deleted']:
-                    results_table.add_row("[dim]🗑[/dim]", "[dim]Source file deleted[/dim]")
+                results_text = f"  [green]✓[/green]  {imported} [dim]new transactions[/dim]\n"
+                results_text += f"  [yellow]◌[/yellow]  {skipped} [dim]duplicates skipped[/dim]\n"
+                if archived:
+                    results_text += f"  [blue]▸[/blue]  [dim]Source file archived[/dim]"
                 else:
-                    results_table.add_row("[bold red]⚠[/bold red]", "[bold red]Could not delete source file[/bold red]")
+                    results_text += f"  [red]⚠[/red]  [red]Archive failed[/red]"
 
-                console.print(results_table)
-
-                total_imported += result['imported_count']
+                console.print(Panel(
+                    results_text,
+                    border_style=theme['main_color'],
+                    expand=False,
+                    padding=(1, 2)
+                ))
+                total_imported += imported
         
-        console.print(Rule(style=engine.config['theme']['main_color']))
-        console.print(f"\n[bold green]Import complete! Added {total_imported} new transactions.[/bold green]")
+        console.print()
+        summary_box = f"[green]✓[/green] [bold]Import complete[/bold]"
+        if total_imported > 0:
+            summary_box += f"\n[dim]Added[/dim] [green]{total_imported}[/green] [dim]new transactions to your history[/dim]"
+        else:
+            summary_box += f"\n[dim]No new transactions were added[/dim]"
+
+        console.print(Panel(
+            summary_box,
+            border_style="green",
+            expand=False,
+            padding=(1, 4)
+        ))
     
-    Prompt.ask("\nPress Enter to return to the main menu.")
+    Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
+    
+    Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
 
 
 def show_monthly_overview(engine: BudgetEngine):

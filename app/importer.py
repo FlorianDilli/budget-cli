@@ -3,7 +3,7 @@ import csv
 import shutil
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 from app.core import BudgetEngine
 from app.crypto import generate_transaction_hash
@@ -44,7 +44,7 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
         - A list of strings representing the CSV headers.
     """
     transactions = []
-    headers = []
+    headers: List[str] = []
     
     # Security check: ensure the file is not excessively large
     if os.path.getsize(filepath) > 10_000_000:  # 10 MB limit
@@ -53,7 +53,8 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
     try:
         with open(filepath, mode='r', encoding='utf-8-sig') as csvfile:  # Use utf-8-sig to handle BOM
             reader = csv.DictReader(csvfile, delimiter=delimiter)
-            headers = reader.fieldnames if reader.fieldnames else []
+            fieldnames = reader.fieldnames
+            headers = list(fieldnames) if fieldnames else []
             for row in reader:
                 transactions.append(row)
     except FileNotFoundError:
@@ -63,7 +64,7 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
     
     return transactions, headers
 
-def detect_format(headers: List[str], formats: List[Dict[str, Any]]) -> Dict[str, Any]:
+def detect_format(headers: List[str], formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
     Detects which format matches the given CSV headers.
 
@@ -181,22 +182,27 @@ def normalize_transaction(record: Dict[str, Any], format_config: Dict[str, Any],
     except (InvalidOperation, ValueError) as e:
         raise ValueError(f"Could not normalize record {record}: {e}")
 
-def delete_file(filepath: str, allowed_directory: str) -> None:
+def archive_file(filepath: str, import_dir: str) -> None:
     """
-    Deletes a file from the filesystem, with a security check.
+    Archives a file by moving it to a 'processed' subfolder within the import directory.
 
     Args:
-        filepath: The path to the file to be deleted.
-        allowed_directory: The directory where deletions are permitted.
+        filepath: The path to the file to be archived.
+        import_dir: The directory where the file is located.
     """
-    # Security check: Ensure we are only deleting files in the designated import folder
-    if not os.path.abspath(filepath).startswith(os.path.abspath(allowed_directory)):
-        raise RuntimeError(f"Security violation: Attempted to delete a file outside the import directory: {filepath}")
+    if not os.path.abspath(filepath).startswith(os.path.abspath(import_dir)):
+        raise RuntimeError(f"Security violation: Attempted to archive a file outside the import directory: {filepath}")
 
+    processed_dir = os.path.join(import_dir, "processed")
     try:
-        os.remove(filepath)
+        os.makedirs(processed_dir, exist_ok=True)
+        filename = os.path.basename(filepath)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archived_name = f"{timestamp}_{filename}"
+        archived_path = os.path.join(processed_dir, archived_name)
+        shutil.move(filepath, archived_path)
     except OSError as e:
-        raise RuntimeError(f"Error deleting file {filepath}: {e}")
+        raise RuntimeError(f"Error archiving file {filepath}: {e}")
 
 def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> Dict[str, Any]:
     """
@@ -213,7 +219,7 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         - 'format_name': The name of the detected format.
         - 'imported_count': Number of new transactions successfully imported.
         - 'skipped_count': Number of duplicates skipped.
-        - 'deleted': Boolean indicating if the source file was deleted.
+        - 'archived': Boolean indicating if the source file was archived.
         - 'error': Error message if detection failed.
     """
     formats = engine.config.get('importer', {}).get('formats', [])
@@ -262,7 +268,7 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
             "format_name": "Unknown",
             "imported_count": 0,
             "skipped_count": 0,
-            "deleted": False,
+            "archived": False,
             "error": error_msg
         }
 
@@ -315,12 +321,11 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
             skipped_transactions_count += 1
             continue
 
-    # Finally, delete the imported CSV file
-    deleted = False
+    # Finally, archive the imported CSV file
+    archived = False
     try:
-        # Pass the directory from the engine's config to ensure safe deletion
-        delete_file(csv_path, import_dir)
-        deleted = True
+        archive_file(csv_path, import_dir)
+        archived = True
     except RuntimeError:
         pass
 
@@ -329,5 +334,5 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         "format_name": format_name,
         "imported_count": new_transactions_count,
         "skipped_count": skipped_transactions_count,
-        "deleted": deleted
+        "archived": archived
     }
