@@ -237,9 +237,12 @@ def show_history_view(engine: BudgetEngine):
             return
 
         # --- Month Selection Menu ---
-        # Format "YYYY-MM" for display and map to (year, month)
-        month_map = {f"{year}-{month}": (year, month) for year, month in available_months}
-        month_menu_items = sorted(month_map.keys(), reverse=True) + ["[ Back to Main Menu ]"]
+        def format_month_display(year, month):
+            name = datetime.strptime(f"{year}-{month}-01", "%Y-%m-%d").strftime("%B")
+            return f"{name:<12} {year}"
+        
+        month_map = {format_month_display(year, month): (year, month) for year, month in available_months}
+        month_menu_items = sorted(month_map.keys(), key=lambda x: month_map[x], reverse=True) + ["[ Back to Main Menu ]"]
         
         console.clear()
         console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Transaction History[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
@@ -394,14 +397,21 @@ def run_importer(engine: BudgetEngine):
                 console.print(f"[bold red]Error:[/bold red] {result['error']}")
             else:
                 console.print(f"Format: [cyan]{result['format_name']}[/cyan] (Detected)")
-                console.print("\nImport Results:")
-                console.print(f"  [green]✔[/green]  {result['imported_count']} transactions imported")
-                console.print(f"  [yellow]•[/yellow]  {result['skipped_count']} duplicates skipped")
+                console.print()
+
+                results_table = Table(border_style=engine.config['theme']['main_color'], show_header=False, expand=False)
+                results_table.add_column(width=3)
+                results_table.add_column()
+
+                results_table.add_row("[green]✔[/green]", f"[green]{result['imported_count']}[/green] transactions imported")
+                results_table.add_row("[yellow]•[/yellow]", f"{result['skipped_count']} duplicates skipped")
                 if result['deleted']:
-                    console.print(f"  [dim]🗑  Source file deleted[/dim]")
+                    results_table.add_row("[dim]🗑[/dim]", "[dim]Source file deleted[/dim]")
                 else:
-                    console.print(f"  [bold red]⚠  Could not delete source file[/bold red]")
-                
+                    results_table.add_row("[bold red]⚠[/bold red]", "[bold red]Could not delete source file[/bold red]")
+
+                console.print(results_table)
+
                 total_imported += result['imported_count']
         
         console.print(Rule(style=engine.config['theme']['main_color']))
