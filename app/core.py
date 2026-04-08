@@ -33,11 +33,31 @@ class BudgetEngine:
         self.db = DatabaseManager(self.db_path)
         self._encryption_key = None
         self.config = self._load_config()
+        self._config_mtime = os.path.getmtime(self.config_path)
 
         self._get_recurring_transactions() # Validate recurring transactions on init
 
         self._connect_to_db()
         self._verify_password()
+
+    def check_and_reload_config_if_changed(self) -> Dict[str, Any]:
+        """
+        Checks if the config file has been modified since last load.
+        If so, reloads the config and re-applies rules.
+        
+        Returns:
+            A dict with 'count' (updated transactions) if reloaded, None otherwise.
+        """
+        try:
+            current_mtime = os.path.getmtime(self.config_path)
+        except OSError:
+            return None
+        
+        if current_mtime != self._config_mtime:
+            self._config_mtime = current_mtime
+            updated_count = self.reload_config_and_reapply_all()
+            return {"count": updated_count}
+        return None
 
     def _load_config(self) -> Dict[str, Any]:
         """Loads the user's configuration from a TOML file."""

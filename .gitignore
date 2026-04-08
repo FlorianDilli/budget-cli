@@ -10,6 +10,7 @@ venv/
 # User Data
 userdata/
 .kilocode/
+.kilo/
 
 # Database files
 *.db

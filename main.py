@@ -77,8 +77,16 @@ def format_summary_amount(amount: Decimal, currency: str, theme: dict, round_amo
         return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
+def check_config_and_notify(engine: BudgetEngine) -> dict:
+    """Checks if config changed and prints notification. Returns reload info or None."""
+    reload_info = engine.check_and_reload_config_if_changed()
+    if reload_info:
+        console.print(f"\n[dim]✓ Config auto-reloaded: {reload_info['count']} transactions updated[/dim]")
+    return reload_info
+
 def show_main_dashboard(engine: BudgetEngine):
     """Displays the main dashboard with a summary and recent transactions."""
+    check_config_and_notify(engine)
     summary = engine.get_dashboard_summary()
     theme = engine.config.get("theme", {})
     
@@ -218,6 +226,7 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
 
 def show_history_view(engine: BudgetEngine):
     """Displays the transaction history, allowing filtering by month."""
+    check_config_and_notify(engine)
     
     while True:
         available_months = engine.get_available_months()
@@ -241,8 +250,19 @@ def show_history_view(engine: BudgetEngine):
             name = datetime.strptime(f"{year}-{month}-01", "%Y-%m-%d").strftime("%B")
             return f"{name:<12} {year}"
         
-        month_map = {format_month_display(year, month): (year, month) for year, month in available_months}
-        month_menu_items = sorted(month_map.keys(), key=lambda x: month_map[x], reverse=True) + ["[ Back to Main Menu ]"]
+        month_map = {(year, month): format_month_display(year, month) for year, month in available_months}
+        month_map_inv = {v: k for k, v in month_map.items()}
+        sorted_months = sorted(available_months, key=lambda x: x, reverse=True)
+        
+        month_menu_items = []
+        year_separator = f"{'─' * 20}"
+        prev_year = None
+        for year, month in sorted_months:
+            if prev_year is not None and year != prev_year:
+                month_menu_items.append(year_separator)
+            month_menu_items.append(month_map[(year, month)])
+            prev_year = year
+        month_menu_items.append("[ Back to Main Menu ]")
         
         console.clear()
         console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Transaction History[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
@@ -252,15 +272,23 @@ def show_history_view(engine: BudgetEngine):
         terminal_menu = TerminalMenu(
             month_menu_items,
             title="Select a month to view transactions:",
+            skip_empty_entries=True,
         )
         menu_index = terminal_menu.show()
-
-        if menu_index is None or month_menu_items[menu_index] == "[ Back to Main Menu ]":
-            return
-
-        # --- Display Transactions for Selected Month ---
+        
+        while True:
+            if menu_index is None:
+                return
+            selected = month_menu_items[menu_index]
+            if selected == "[ Back to Main Menu ]":
+                return
+            if selected == year_separator:
+                menu_index = terminal_menu.show()
+                continue
+            break
+        
         selected_month_str = month_menu_items[menu_index]
-        year, month = month_map[selected_month_str]
+        year, month = month_map_inv[selected_month_str]
         
         summary = engine.get_monthly_summary(year, month)
         transactions = engine.get_transactions_for_month(year, month)
@@ -369,6 +397,7 @@ def show_history_view(engine: BudgetEngine):
 
 def run_importer(engine: BudgetEngine):
     """Handles the logic for importing transactions from CSV files."""
+    check_config_and_notify(engine)
     console.clear()
     theme = engine.config['theme']
 
@@ -454,6 +483,7 @@ def run_importer(engine: BudgetEngine):
 
 def show_monthly_overview(engine: BudgetEngine):
     """Displays a summary table for all months with transactions."""
+    check_config_and_notify(engine)
     summaries = engine.get_all_months_summary()
     theme = engine.config.get("theme", {})
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)
