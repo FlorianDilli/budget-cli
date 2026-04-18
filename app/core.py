@@ -318,7 +318,33 @@ class BudgetEngine:
         
         return total_monthly_flow
 
-    def _calculate_expenses_and_alerts(self, transactions: List[Dict[str, Any]], month: int) -> Tuple[Decimal, List[str], List[Dict[str, Any]]]:
+    def _is_recurring_active_for_month(self, rt: Dict[str, Any], year: int, month: int) -> bool:
+        """
+        Check if a recurring transaction config is active for a given year/month.
+        
+        Args:
+            rt: Recurring transaction config dictionary
+            year: The year to check
+            month: The month to check (1-12)
+            
+        Returns:
+            True if the recurring transaction is active for this month
+        """
+        start_date_str = rt.get('start_date')
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            if year < start_date.year or (year == start_date.year and month < start_date.month):
+                return False
+            
+        end_date_str = rt.get('end_date')
+        if end_date_str:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            if year > end_date.year or (year == end_date.year and month > end_date.month):
+                return False
+        
+        return True
+
+    def _calculate_expenses_and_alerts(self, transactions: List[Dict[str, Any]], year: int, month: int) -> Tuple[Decimal, List[str], List[Dict[str, Any]]]:
         """
         Calculates monthly expenses, identifying alerts for recurring transaction anomalies.
         """
@@ -338,6 +364,8 @@ class BudgetEngine:
             desc_lower = t['description'].lower()
             for i, rt in enumerate(recurring_transactions):
                 if rt['description'].lower() in desc_lower:
+                    if not self._is_recurring_active_for_month(rt, year, month):
+                        continue
                     rt_amount = Decimal(str(rt['amount']))
                     if t['amount'] == rt_amount:
                         configs_with_perfect_match.add(i)
@@ -358,6 +386,8 @@ class BudgetEngine:
                 potential_matches = []
                 for i, rt in enumerate(recurring_transactions):
                     if rt['description'].lower() in desc_lower:
+                        if not self._is_recurring_active_for_month(rt, year, month):
+                            continue
                         potential_matches.append((i, rt))
                 
                 if potential_matches:
@@ -406,11 +436,15 @@ class BudgetEngine:
                         if difference != 0:
                             monthly_expenses += difference
                             alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
-                            t_processed['error_code'] = "AMOUNT_MISMATCH"
+                            if 'error_codes' not in t_processed:
+                                t_processed['error_codes'] = []
+                            t_processed['error_codes'].append("AMOUNT_MISMATCH")
                         else:
-                            t_processed['error_code'] = "VERIFIED"
+                            if 'error_codes' not in t_processed:
+                                t_processed['error_codes'] = []
+                            t_processed['error_codes'].append("VERIFIED")
                     else:
-                        # Annual/Recurring > 1
+                        # Recurring > 1
                         payment_months = matched_config.get('payment_month')
                         # Normalize to list for easier checking
                         if isinstance(payment_months, int):
@@ -423,15 +457,21 @@ class BudgetEngine:
                                 if actual_amount != defined_amount:
                                     monthly_expenses += (actual_amount - defined_amount)
                                     alerts.append(f"Amount mismatch for '{t['description']}': Expected {defined_amount:.2f}, got {actual_amount:.2f}")
-                                    t_processed['error_code'] = "AMOUNT_MISMATCH"
+                                    if 'error_codes' not in t_processed:
+                                        t_processed['error_codes'] = []
+                                    t_processed['error_codes'].append("AMOUNT_MISMATCH")
                                 else:
-                                    t_processed['error_code'] = "VERIFIED"
+                                    if 'error_codes' not in t_processed:
+                                        t_processed['error_codes'] = []
+                                    t_processed['error_codes'].append("VERIFIED")
                             else:
                                 # Wrong month - treat as full expense
                                 monthly_expenses += t['amount']
                                 expected_str = ", ".join(map(str, payment_months))
-                                alerts.append(f"Annual payment '{t['description']}' detected in wrong month (expected {expected_str})")
-                                t_processed['error_code'] = "WRONG_MONTH"
+                                alerts.append(f"Recurring payment '{t['description']}' detected in wrong month (expected {expected_str})")
+                                if 'error_codes' not in t_processed:
+                                    t_processed['error_codes'] = []
+                                t_processed['error_codes'].append("WRONG_MONTH")
                         else:
                              # No payment month defined, ignore (assume budgeted)
                              pass
@@ -439,6 +479,8 @@ class BudgetEngine:
                     # Fallback if no config matches (or if it was skipped by Smart Fallback)
                     monthly_expenses += t['amount']
                     t_processed['is_recurring'] = False # Treat as non-recurring in the UI too
+                    if 'error_codes' not in t_processed:
+                        t_processed['error_codes'] = []
 
             processed_transactions.append(t_processed)
 
@@ -451,7 +493,7 @@ class BudgetEngine:
                     
                 if payment_months and int(month) in payment_months:
                     if i not in matched_recurring_indices:
-                        alerts.append(f"Expected annual payment for '{rt['description']}' not found")
+                        alerts.append(f"Expected recurring payment for '{rt['description']}' not found")
 
         return monthly_expenses, alerts, processed_transactions
 
@@ -492,7 +534,7 @@ class BudgetEngine:
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
         
         # Calculate expenses and alerts
-        monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(latest_month))
+        monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(latest_year), int(latest_month))
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
 
@@ -525,7 +567,7 @@ class BudgetEngine:
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
         
         # Calculate expenses and alerts
-        monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(month))
+        monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(year), int(month))
         
         available_to_spend = normalized_monthly_flow + monthly_expenses
         
@@ -607,9 +649,8 @@ class BudgetEngine:
         if existing:
             return False  # Duplicate found
 
-        # Determine if recurring
-        recurring_descriptions = {trans['description'].lower() for trans in self._get_recurring_transactions()}
-        is_recurring = 1 if any(rec_desc in description.lower() for rec_desc in recurring_descriptions) else 0
+        # Determine if recurring - check all recurring transactions, not just unique descriptions
+        is_recurring = self._is_transaction_recurring(description, date)
 
         # Encrypt sensitive fields
         try:
@@ -633,6 +674,39 @@ class BudgetEngine:
         except Exception as e:
             # Handle potential database errors
             raise RuntimeError(f"Database insertion failed: {e}")
+
+    def _is_transaction_recurring(self, description: str, date_str: str) -> int:
+        """
+        Check if a transaction matches any recurring transaction config.
+        
+        Args:
+            description: The transaction description
+            date_str: The transaction date in YYYY-MM-DD format
+            
+        Returns:
+            1 if the transaction is recurring, 0 otherwise
+        """
+        recurring_transactions = self._get_recurring_transactions()
+        transaction_date = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        for rt in recurring_transactions:
+            if rt['description'].lower() not in description.lower():
+                continue
+            
+            start_date_str = rt.get('start_date')
+            if start_date_str:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                if transaction_date < start_date:
+                    continue
+            
+            end_date_str = rt.get('end_date')
+            if end_date_str:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                if transaction_date > end_date:
+                    continue
+            
+            return 1
+        return 0
 
     def get_recent_transactions(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Retrieves and decrypts the most recent transactions."""
@@ -704,7 +778,7 @@ class BudgetEngine:
         """Retrieves and decrypts all transactions for a given month."""
         transactions = self.db.get_transactions(year=year, month=month, sort_order="ASC")
         decrypted = self._decrypt_transactions(transactions)
-        _, _, processed_transactions = self._calculate_expenses_and_alerts(decrypted, int(month))
+        _, _, processed_transactions = self._calculate_expenses_and_alerts(decrypted, int(year), int(month))
         return processed_transactions
 
     def get_available_months(self) -> List[Tuple[str, str]]:
@@ -891,11 +965,10 @@ class BudgetEngine:
         updated_count = 0
         all_transactions = self.db.get_transactions()  # Gets all transactions
 
-        recurring_descriptions = {trans['description'].lower() for trans in self._get_recurring_transactions()}
-
         for t in all_transactions:
             try:
                 decrypted_desc = decrypt(bytes.fromhex(t['description']), self._encryption_key).decode('utf-8')
+                transaction_date = t['transaction_date']
                 
                 # --- 1. Check for Category Changes ---
                 old_category_bytes = bytes.fromhex(t['category'])
@@ -911,13 +984,9 @@ class BudgetEngine:
                     )
 
                 # --- 2. Check for Recurring Status Changes ---
-                # --- 2. Check for Recurring Status Changes ---
                 old_is_recurring = t['is_recurring']
                 
-                # A transaction is recurring only if its description matches the list AND it has a valid recurrence config.
-                # This prevents an old, recurring transaction from causing a crash if its config is removed.
-                is_in_recurring_list = any(rec_desc in decrypted_desc.lower() for rec_desc in recurring_descriptions)
-                new_is_recurring = 1 if is_in_recurring_list else 0
+                new_is_recurring = self._is_transaction_recurring(decrypted_desc, transaction_date)
                 
                 recurring_changed = old_is_recurring != new_is_recurring
                 if recurring_changed:

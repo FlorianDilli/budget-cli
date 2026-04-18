@@ -380,14 +380,16 @@ def show_history_view(engine: BudgetEngine):
                 description = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{t['description']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if t.get('is_recurring') else t['description']
                 category = t['category'] if t['category'] else "Uncategorized"
                 
-                status = ""
-                error_code = t.get('error_code')
-                if error_code == "AMOUNT_MISMATCH":
-                    status = "[bold red]⚠ Amount Mismatch[/bold red]"
-                elif error_code == "WRONG_MONTH":
-                    status = "[bold yellow]⚠ Wrong Month[/bold yellow]"
-                elif error_code == "VERIFIED":
-                    status = "[green]✔ Verified[/green]"
+                status_parts = []
+                error_codes = t.get('error_codes', [])
+                for error_code in error_codes:
+                    if error_code == "AMOUNT_MISMATCH":
+                        status_parts.append("[bold red]⚠ Amount Mismatch[/bold red]")
+                    elif error_code == "WRONG_MONTH":
+                        status_parts.append("[bold yellow]⚠ Wrong Month[/bold yellow]")
+                    elif error_code == "VERIFIED":
+                        status_parts.append("[green]✔ Verified[/green]")
+                status = " | ".join(status_parts) if status_parts else ""
 
                 trans_table.add_row(t['date'], description, amount_text, category, status)
             console.print(trans_table)
