@@ -499,6 +499,51 @@ def show_monthly_overview(engine: BudgetEngine):
         Prompt.ask("\nPress Enter to return to the main menu.")
         return
 
+    # --- Insights: average total transaction amount per finished month ---
+    # The current month is excluded because it may still be missing some
+    # important transactions, which would skew the average.
+    now = datetime.now()
+    finished_summaries = [
+        s for s in summaries
+        if not (int(s['year']) == now.year and int(s['month']) == now.month)
+    ]
+
+    if finished_summaries:
+        # get_available_months() returns months in descending order, so
+        # finished_summaries is ordered most-recent-first as well.
+        currency = finished_summaries[0]['currency']
+
+        insights_grid = Table.grid(padding=(0, 1))
+        insights_grid.add_column(style=theme['main_color'])
+        insights_grid.add_column()
+
+        # Average over the past 3 finished months (or fewer if not available).
+        recent_summaries = finished_summaries[:3]
+        recent_total = sum(s['total_spent'] for s in recent_summaries)
+        recent_average = recent_total / len(recent_summaries)
+        recent_average_text = format_summary_amount(recent_average, currency, theme, round_amounts)
+        insights_grid.add_row(
+            f"Average total per month (last {len(recent_summaries)} finished month(s)):",
+            recent_average_text,
+        )
+
+        # Average over all finished months.
+        total_of_finished = sum(s['total_spent'] for s in finished_summaries)
+        average_per_month = total_of_finished / len(finished_summaries)
+        average_text = format_summary_amount(average_per_month, currency, theme, round_amounts)
+        insights_grid.add_row(
+            f"Average total per month (all {len(finished_summaries)} finished month(s)):",
+            average_text,
+        )
+        console.print(Panel(
+            insights_grid,
+            title=f"[bold {theme['accent_color']}]Insights[/bold {theme['accent_color']}]",
+            title_align="left",
+            border_style=theme['main_color'],
+            expand=False,
+        ))
+        console.print()
+
     table = Table(expand=True, border_style=theme['main_color'], show_lines=True)
     table.add_column("Month", style=theme['accent_color'])
     table.add_column("Monthly Budget", justify="right")
