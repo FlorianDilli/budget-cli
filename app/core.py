@@ -239,7 +239,12 @@ class BudgetEngine:
         # Enhanced validation for recurring transactions
         for t in transactions:
             description = t.get('description', 'N/A')
-            if not isinstance(t.get('amount'), (int, float)):
+            history = t.get('amount_history')
+            has_history = isinstance(history, list) and len(history) > 0
+
+            # `amount` is required unless `amount_history` is provided, in which
+            # case the most recent history entry acts as the current/default price.
+            if not has_history and not isinstance(t.get('amount'), (int, float)):
                 raise ValueError(f"Invalid or missing 'amount' for recurring transaction: '{description}'")
             
             # This validation is now more strict. It ensures that 'recurrence_months' is a positive integer.
@@ -278,9 +283,85 @@ class BudgetEngine:
                         f"'end_date' must not be before 'start_date' for recurring transaction: '{description}'."
                     )
 
+            # Validate optional amount_history (effective-dated price changes)
+            history = t.get('amount_history')
+            if history is not None:
+                if not isinstance(history, list):
+                    raise ValueError(f"Invalid 'amount_history' for recurring transaction: '{description}'. Must be a list of {{from, amount}} tables.")
+                for entry in history:
+                    if not isinstance(entry, dict):
+                        raise ValueError(f"Invalid entry in 'amount_history' for recurring transaction: '{description}'. Each entry must be a table with 'from' and 'amount'.")
+                    if 'from' not in entry or 'amount' not in entry:
+                        raise ValueError(f"Invalid entry in 'amount_history' for recurring transaction: '{description}'. Each entry must have 'from' (YYYY-MM-DD) and 'amount'.")
+                    if not isinstance(entry['amount'], (int, float)):
+                        raise ValueError(f"Invalid 'amount' in 'amount_history' for recurring transaction: '{description}'. Must be a number.")
+                    try:
+                        datetime.strptime(entry['from'], '%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Invalid 'from' date in 'amount_history' for recurring transaction: '{description}'. Use YYYY-MM-DD.")
+
         return transactions
 
-    def _get_normalized_budget(self, effective_date: datetime = None) -> Decimal:
+    def _get_effective_amount(self, rt: Dict[str, Any], effective_date: datetime) -> Decimal:
+        """
+        Resolves the amount of a recurring transaction as of a given date.
+
+        A recurring transaction may define an optional `amount_history`: a list of
+        `{ from = "YYYY-MM-DD", amount = X }` entries describing price changes over
+        time. The amount in effect on `effective_date` is the entry with the latest
+        `from` date that is not after `effective_date`. If no history entry applies
+        (e.g. all entries are in the future), the base `amount` is used when present;
+        otherwise the most recent history entry is treated as the current price.
+
+        This allows a single recurring-transaction entry to track price changes
+        without duplicating the entry with start/end dates. When `amount_history`
+        is provided, the base `amount` is optional.
+
+        Args:
+            rt: The recurring transaction config dictionary.
+            effective_date: The date for which the amount should be resolved.
+
+        Returns:
+            The effective amount as a Decimal.
+        """
+        history = rt.get('amount_history')
+        if history:
+            applicable_from = None
+            applicable_amount = None
+            latest_from = None
+            latest_amount = None
+            for entry in history:
+                from_str = entry.get('from')
+                if from_str is None:
+                    continue
+                try:
+                    from_date = datetime.strptime(from_str, '%Y-%m-%d')
+                except (ValueError, TypeError):
+                    continue
+                # Track the most recent history entry (used as the default price
+                # when `amount` is omitted and no entry applies yet).
+                if latest_from is None or from_date > latest_from:
+                    latest_from = from_date
+                    latest_amount = entry.get('amount')
+                if from_date <= effective_date:
+                    if applicable_from is None or from_date > applicable_from:
+                        applicable_from = from_date
+                        applicable_amount = entry.get('amount')
+
+            if applicable_amount is not None:
+                return Decimal(str(applicable_amount))
+
+            # No history entry applies yet (e.g. all are in the future). Fall back
+            # to the base `amount` if present, otherwise to the most recent entry.
+            if 'amount' in rt:
+                return Decimal(str(rt['amount']))
+            if latest_amount is not None:
+                return Decimal(str(latest_amount))
+
+        # Fall back to the base amount (also the default for entries without history)
+        return Decimal(str(rt['amount']))
+
+    def _get_normalized_budget(self, effective_date: datetime = None, transactions: List[Dict[str, Any]] = None) -> Decimal:
         """
         Calculates a normalized monthly budget from recurring transactions,
         considering their start dates.
@@ -288,6 +369,15 @@ class BudgetEngine:
         Args:
             effective_date: The date to check against for active transactions.
                             If None, defaults to the current date.
+            transactions: The (decrypted) transactions of the month being summarized.
+                          When provided, the effective amount of a recurring
+                          transaction is resolved as of the actual transaction's
+                          date. This ensures a price change that takes effect
+                          mid-month is reflected in that month's budget instead of
+                          only from the following month.
+
+        Returns:
+            The normalized monthly budget as a Decimal.
         """
         if effective_date is None:
             effective_date = datetime.now()
@@ -310,7 +400,16 @@ class BudgetEngine:
                 if effective_date > end_date:
                     continue  # Skip if it has already ended
 
-            amount = Decimal(str(t['amount']))
+            # Resolve the reference date for the effective amount. Prefer the
+            # actual transaction's date so mid-month price changes are reflected.
+            ref_date = effective_date
+            if transactions:
+                for tr in transactions:
+                    if t['description'].lower() in tr['description'].lower():
+                        ref_date = datetime.strptime(tr['date'], '%Y-%m-%d')
+                        break
+
+            amount = self._get_effective_amount(t, ref_date)
             recurrence_months = t.get('recurrence_months', 1)
             
             if recurrence_months > 0:
@@ -366,7 +465,7 @@ class BudgetEngine:
                 if rt['description'].lower() in desc_lower:
                     if not self._is_recurring_active_for_month(rt, year, month):
                         continue
-                    rt_amount = Decimal(str(rt['amount']))
+                    rt_amount = self._get_effective_amount(rt, datetime.strptime(t['date'], '%Y-%m-%d'))
                     if t['amount'] == rt_amount:
                         configs_with_perfect_match.add(i)
 
@@ -394,7 +493,7 @@ class BudgetEngine:
                     # Smart Matching: Find the best fit among potential matches
                     # Priority 1: Match both amount and month
                     for i, rt in potential_matches:
-                        rt_amount = Decimal(str(rt['amount']))
+                        rt_amount = self._get_effective_amount(rt, datetime.strptime(t['date'], '%Y-%m-%d'))
                         rt_months = rt.get('payment_month')
                         if isinstance(rt_months, int):
                             rt_months = [rt_months]
@@ -410,7 +509,7 @@ class BudgetEngine:
                     # Priority 2: Match just amount
                     if not matched_config:
                         for i, rt in potential_matches:
-                            if t['amount'] == Decimal(str(rt['amount'])):
+                            if t['amount'] == self._get_effective_amount(rt, datetime.strptime(t['date'], '%Y-%m-%d')):
                                 matched_config = rt
                                 matched_index = i
                                 break
@@ -430,7 +529,7 @@ class BudgetEngine:
                     recurrence = matched_config.get('recurrence_months', 1)
                     
                     if recurrence == 1:
-                        defined_amount = Decimal(str(matched_config['amount']))
+                        defined_amount = self._get_effective_amount(matched_config, datetime.strptime(t['date'], '%Y-%m-%d'))
                         actual_amount = t['amount']
                         difference = actual_amount - defined_amount
                         if difference != 0:
@@ -452,7 +551,7 @@ class BudgetEngine:
                             
                         if payment_months:
                             if int(month) in payment_months:
-                                defined_amount = Decimal(str(matched_config['amount']))
+                                defined_amount = self._get_effective_amount(matched_config, datetime.strptime(t['date'], '%Y-%m-%d'))
                                 actual_amount = t['amount']
                                 if actual_amount != defined_amount:
                                     monthly_expenses += (actual_amount - defined_amount)
@@ -527,11 +626,13 @@ class BudgetEngine:
             start_of_month = today.replace(day=1)
             latest_month_str = today.strftime('%B %Y')
         
-        normalized_monthly_flow = self._get_normalized_budget(effective_date=start_of_month)
-
         # Fetch transactions for the determined period
         transactions_for_period = self.db.get_transactions(year=latest_year, month=latest_month)
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
+
+        # Calculate budget based on the start of the selected month, using the
+        # actual transactions so mid-month price changes are reflected.
+        normalized_monthly_flow = self._get_normalized_budget(effective_date=start_of_month, transactions=decrypted_transactions)
         
         # Calculate expenses and alerts
         monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(latest_year), int(latest_month))
@@ -559,13 +660,12 @@ class BudgetEngine:
         """
         # Fetch transactions for the specified month
         transactions_for_period = self.db.get_transactions(year=year, month=month)
-        
-        # Calculate budget based on the start of the selected month
-        effective_date = datetime(int(year), int(month), 1)
-        normalized_monthly_flow = self._get_normalized_budget(effective_date=effective_date)
-
         decrypted_transactions = self._decrypt_transactions(transactions_for_period)
-        
+
+        # Calculate budget based on the start of the selected month, using the
+        # actual transactions so mid-month price changes are reflected.
+        effective_date = datetime(int(year), int(month), 1)
+        normalized_monthly_flow = self._get_normalized_budget(effective_date=effective_date, transactions=decrypted_transactions)
         # Calculate expenses and alerts
         monthly_expenses, alerts, _ = self._calculate_expenses_and_alerts(decrypted_transactions, int(year), int(month))
         

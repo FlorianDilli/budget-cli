@@ -12,7 +12,25 @@ The final "monthly budget" is the sum of all these normalized recurring transact
 
 The application calculates the budget for any given month—past or present—by looking at your `config.toml` and determining which recurring transactions were active on the **first day** of that specific month. It does not store a historical record of the budget itself.
 
-This means if you change the amount of a recurring transaction (e.g., your rent increases), the history for past months will be recalculated based on this new amount. To maintain accurate historical records, you should end the old transaction with an `end_date` and create a new one with a `start_date`.
+If a recurring transaction's amount changed over time (for example, your rent increased or a subscription's price went up), you can record the change directly on the same entry using `amount_history` instead of duplicating the entry. This keeps a single entry while still producing accurate historical budgets and avoiding false "amount mismatch" alerts. For example:
+
+```toml
+[[recurring_transactions]]
+description       = "Netflix"
+amount            = 12.99          # Current/default price
+recurrence_months = 1
+amount_history = [
+  { from = "2022-01-01", amount = 7.99 },
+  { from = "2024-06-01", amount = 10.99 },
+  { from = "2025-03-01", amount = 12.99 },
+]
+```
+
+Each `from` date marks when a new price took effect. The app uses the most recent price that is not after the month being calculated, so past months automatically reflect their historical price—no need to enter the same subscription twice with `start_date`/`end_date`.
+
+The base `amount` is optional when `amount_history` is provided: if you omit it, the most recent history entry is used as the current price.
+
+Only if you want to fully stop a recurring transaction (rather than change its price) should you still use `end_date` (and optionally start a new entry with a `start_date`).
 
 ### How is the "Available to Spend" amount calculated?
 
