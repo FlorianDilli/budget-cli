@@ -103,3 +103,29 @@ This menu gives you options to manage your data:
 
 ### 👋 Exit
 Safely closes the application.
+
+## 🗑️ Uninstallation
+
+To completely remove Budget CLI from your system, follow these steps:
+
+### Step 1: Delete the Repository
+Remove the `budget-cli` folder where you cloned the repository:
+```bash
+# On macOS or Linux
+rm -rf ~/Documents/budget-cli
+
+# On Windows
+rmdir /s /q C:\Users\YourUsername\Documents\budget-cli
+```
+
+### Step 2: Remove the Userdata Directory
+If you set a custom `BUDGET_DATA_PATH`, delete that directory and all its contents. If you used the default location inside the application folder, delete the `userdata` folder:
+```bash
+# On macOS or Linux
+rm -rf /path/to/your/userdata
+
+# On Windows
+rmdir /s /q C:\path\to\your\userdata
+```
+
+Your Budget CLI installation has been completely removed from your system.

@@ -12,6 +12,7 @@ from rich.progress_bar import ProgressBar
 from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt, Confirm
+from rich.rule import Rule
 
 from app.core import BudgetEngine
 from app.importer import discover_csv_files, import_transactions
@@ -76,8 +77,16 @@ def format_summary_amount(amount: Decimal, currency: str, theme: dict, round_amo
         return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
+def check_config_and_notify(engine: BudgetEngine) -> dict:
+    """Checks if config changed and prints notification. Returns reload info or None."""
+    reload_info = engine.check_and_reload_config_if_changed()
+    if reload_info:
+        console.print(f"\n[dim]✓ Config auto-reloaded: {reload_info['count']} transactions updated[/dim]")
+    return reload_info
+
 def show_main_dashboard(engine: BudgetEngine):
     """Displays the main dashboard with a summary and recent transactions."""
+    check_config_and_notify(engine)
     summary = engine.get_dashboard_summary()
     theme = engine.config.get("theme", {})
     
@@ -217,6 +226,7 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
 
 def show_history_view(engine: BudgetEngine):
     """Displays the transaction history, allowing filtering by month."""
+    check_config_and_notify(engine)
     
     while True:
         available_months = engine.get_available_months()
@@ -236,9 +246,23 @@ def show_history_view(engine: BudgetEngine):
             return
 
         # --- Month Selection Menu ---
-        # Format "YYYY-MM" for display and map to (year, month)
-        month_map = {f"{year}-{month}": (year, month) for year, month in available_months}
-        month_menu_items = sorted(month_map.keys(), reverse=True) + ["[ Back to Main Menu ]"]
+        def format_month_display(year, month):
+            name = datetime.strptime(f"{year}-{month}-01", "%Y-%m-%d").strftime("%B")
+            return f"{name:<12} {year}"
+        
+        month_map = {(year, month): format_month_display(year, month) for year, month in available_months}
+        month_map_inv = {v: k for k, v in month_map.items()}
+        sorted_months = sorted(available_months, key=lambda x: x, reverse=True)
+        
+        month_menu_items = []
+        year_separator = f"{'─' * 20}"
+        prev_year = None
+        for year, month in sorted_months:
+            if prev_year is not None and year != prev_year:
+                month_menu_items.append(year_separator)
+            month_menu_items.append(month_map[(year, month)])
+            prev_year = year
+        month_menu_items.append("[ Back to Main Menu ]")
         
         console.clear()
         console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Transaction History[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
@@ -248,15 +272,23 @@ def show_history_view(engine: BudgetEngine):
         terminal_menu = TerminalMenu(
             month_menu_items,
             title="Select a month to view transactions:",
+            skip_empty_entries=True,
         )
         menu_index = terminal_menu.show()
-
-        if menu_index is None or month_menu_items[menu_index] == "[ Back to Main Menu ]":
-            return
-
-        # --- Display Transactions for Selected Month ---
+        
+        while True:
+            if menu_index is None:
+                return
+            selected = month_menu_items[menu_index]
+            if selected == "[ Back to Main Menu ]":
+                return
+            if selected == year_separator:
+                menu_index = terminal_menu.show()
+                continue
+            break
+        
         selected_month_str = month_menu_items[menu_index]
-        year, month = month_map[selected_month_str]
+        year, month = month_map_inv[selected_month_str]
         
         summary = engine.get_monthly_summary(year, month)
         transactions = engine.get_transactions_for_month(year, month)
@@ -348,14 +380,16 @@ def show_history_view(engine: BudgetEngine):
                 description = f"[{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]{t['description']}[/{engine.config['theme'].get('recurring_transaction_highlight', 'yellow')}]" if t.get('is_recurring') else t['description']
                 category = t['category'] if t['category'] else "Uncategorized"
                 
-                status = ""
-                error_code = t.get('error_code')
-                if error_code == "AMOUNT_MISMATCH":
-                    status = "[bold red]⚠ Amount Mismatch[/bold red]"
-                elif error_code == "WRONG_MONTH":
-                    status = "[bold yellow]⚠ Wrong Month[/bold yellow]"
-                elif error_code == "VERIFIED":
-                    status = "[green]✔ Verified[/green]"
+                status_parts = []
+                error_codes = t.get('error_codes', [])
+                for error_code in error_codes:
+                    if error_code == "AMOUNT_MISMATCH":
+                        status_parts.append("[bold red]⚠ Amount Mismatch[/bold red]")
+                    elif error_code == "WRONG_MONTH":
+                        status_parts.append("[bold yellow]⚠ Wrong Month[/bold yellow]")
+                    elif error_code == "VERIFIED":
+                        status_parts.append("[green]✔ Verified[/green]")
+                status = " | ".join(status_parts) if status_parts else ""
 
                 trans_table.add_row(t['date'], description, amount_text, category, status)
             console.print(trans_table)
@@ -365,36 +399,93 @@ def show_history_view(engine: BudgetEngine):
 
 def run_importer(engine: BudgetEngine):
     """Handles the logic for importing transactions from CSV files."""
+    check_config_and_notify(engine)
     console.clear()
-    console.print(Panel(f"[bold {engine.config['theme']['accent_color']}]Import Transactions from Statements[/bold {engine.config['theme']['accent_color']}]", expand=False, border_style=engine.config['theme']['main_color']))
-    console.print()
+    theme = engine.config['theme']
+
+    # Standard Header
+    console.print(Panel(f"[bold {theme['accent_color']}]Import Transactions[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
     console.print()
 
     csv_files = discover_csv_files(STATEMENTS_DIR)
     if not csv_files:
         console.print(f"[yellow]No CSV files found in '{STATEMENTS_DIR}'.[/yellow]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
         return
 
-    console.print("Found the following statement files:")
+    # Selection Panel
+    file_list = ""
     for f in csv_files:
-        console.print(f"- {os.path.basename(f)}")
+        basename = os.path.basename(f)
+        if len(basename) > 40:
+            basename = basename[:37] + "..."
+        file_list += f" [yellow]●[/yellow] {basename}\n"
+
+    selection_content = f"\n [dim]Found {len(csv_files)} statement file{'s' if len(csv_files) > 1 else ''}[/dim]\n\n{file_list}"
     
-    if Confirm.ask("\nDo you want to import these transactions?"):
+    console.print(Panel(
+        selection_content,
+        title=f"[bold {theme['accent_color']}]Statement Detection[/bold {theme['accent_color']}]",
+        border_style=theme['main_color'],
+        expand=False,
+        padding=(0, 1)
+    ))
+
+    if Confirm.ask("\n [dim]Do you want to proceed with the import? [y/N][/dim]"):
         total_imported = 0
-        with console.status("[bold green]Importing...[/bold green]"):
-            for f in csv_files:
-                # The importer needs the full engine to handle encryption
-                count = import_transactions(engine, f, STATEMENTS_DIR)
-                total_imported += count
+        for f in csv_files:
+            result = import_transactions(engine, f, STATEMENTS_DIR)
+            
+            console.print()
+            console.print(Rule(f"[bold] {result.get('filename', os.path.basename(f))} [/bold]", style=theme['main_color']))
+            
+            if "error" in result:
+                console.print(f" [bold red]Error:[/bold red] {result['error']}")
+            else:
+                console.print(f" [dim]Format detected:[/dim] [cyan]{result['format_name']}[/cyan]")
+                console.print()
+
+                imported = result['imported_count']
+                skipped = result['skipped_count']
+                archived = result.get('archived', False)
+
+                results_text = f"  [green]✓[/green]  {imported} [dim]new transactions[/dim]\n"
+                results_text += f"  [yellow]◌[/yellow]  {skipped} [dim]duplicates skipped[/dim]\n"
+                if archived:
+                    results_text += f"  [blue]▸[/blue]  [dim]Source file archived[/dim]"
+                else:
+                    results_text += f"  [red]⚠[/red]  [red]Archive failed[/red]"
+
+                console.print(Panel(
+                    results_text,
+                    border_style=theme['main_color'],
+                    expand=False,
+                    padding=(1, 2)
+                ))
+                total_imported += imported
         
-        console.print(f"\n[bold green]Import complete! Added {total_imported} new transactions.[/bold green]")
+        console.print()
+        summary_box = f"[green]✓[/green] [bold]Import complete[/bold]"
+        if total_imported > 0:
+            summary_box += f"\n[dim]Added[/dim] [green]{total_imported}[/green] [dim]new transactions to your history[/dim]"
+        else:
+            summary_box += f"\n[dim]No new transactions were added[/dim]"
+
+        console.print(Panel(
+            summary_box,
+            border_style="green",
+            expand=False,
+            padding=(1, 4)
+        ))
     
-    Prompt.ask("\nPress Enter to return to the main menu.")
+    Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
+    
+    Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
 
 
 def show_monthly_overview(engine: BudgetEngine):
     """Displays a summary table for all months with transactions."""
+    check_config_and_notify(engine)
     summaries = engine.get_all_months_summary()
     theme = engine.config.get("theme", {})
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)

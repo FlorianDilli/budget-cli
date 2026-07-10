@@ -1,12 +1,12 @@
 import os
 import csv
 import shutil
-import hashlib
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 from app.core import BudgetEngine
+from app.crypto import generate_transaction_hash
 
 def discover_csv_files(directory: str) -> List[str]:
     """
@@ -44,7 +44,7 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
         - A list of strings representing the CSV headers.
     """
     transactions = []
-    headers = []
+    headers: List[str] = []
     
     # Security check: ensure the file is not excessively large
     if os.path.getsize(filepath) > 10_000_000:  # 10 MB limit
@@ -53,7 +53,8 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
     try:
         with open(filepath, mode='r', encoding='utf-8-sig') as csvfile:  # Use utf-8-sig to handle BOM
             reader = csv.DictReader(csvfile, delimiter=delimiter)
-            headers = reader.fieldnames if reader.fieldnames else []
+            fieldnames = reader.fieldnames
+            headers = list(fieldnames) if fieldnames else []
             for row in reader:
                 transactions.append(row)
     except FileNotFoundError:
@@ -63,7 +64,7 @@ def parse_csv(filepath: str, delimiter: str = ',') -> Tuple[List[Dict[str, Any]]
     
     return transactions, headers
 
-def detect_format(headers: List[str], formats: List[Dict[str, Any]]) -> Dict[str, Any]:
+def detect_format(headers: List[str], formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
     Detects which format matches the given CSV headers.
 
@@ -171,39 +172,39 @@ def normalize_transaction(record: Dict[str, Any], format_config: Dict[str, Any],
         # The engine's logic is now the source of truth for categories
         category = engine._get_category_from_rules(description)
 
-        # Create a unique hash for the transaction
-        unique_string = f"{normalized_date}-{description}-{amount}"
-        unique_hash = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
-
         return {
             "transaction_date": normalized_date,
             "description": description,
             "amount": amount,
-            "category": category,
-            "unique_hash": unique_hash
+            "category": category
         }
 
     except (InvalidOperation, ValueError) as e:
         raise ValueError(f"Could not normalize record {record}: {e}")
 
-def delete_file(filepath: str, allowed_directory: str) -> None:
+def archive_file(filepath: str, import_dir: str) -> None:
     """
-    Deletes a file from the filesystem, with a security check.
+    Archives a file by moving it to a 'processed' subfolder within the import directory.
 
     Args:
-        filepath: The path to the file to be deleted.
-        allowed_directory: The directory where deletions are permitted.
+        filepath: The path to the file to be archived.
+        import_dir: The directory where the file is located.
     """
-    # Security check: Ensure we are only deleting files in the designated import folder
-    if not os.path.abspath(filepath).startswith(os.path.abspath(allowed_directory)):
-        raise RuntimeError(f"Security violation: Attempted to delete a file outside the import directory: {filepath}")
+    if not os.path.abspath(filepath).startswith(os.path.abspath(import_dir)):
+        raise RuntimeError(f"Security violation: Attempted to archive a file outside the import directory: {filepath}")
 
+    processed_dir = os.path.join(import_dir, "processed")
     try:
-        os.remove(filepath)
+        os.makedirs(processed_dir, exist_ok=True)
+        filename = os.path.basename(filepath)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archived_name = f"{timestamp}_{filename}"
+        archived_path = os.path.join(processed_dir, archived_name)
+        shutil.move(filepath, archived_path)
     except OSError as e:
-        raise RuntimeError(f"Error deleting file {filepath}: {e}")
+        raise RuntimeError(f"Error archiving file {filepath}: {e}")
 
-def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> int:
+def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) -> Dict[str, Any]:
     """
     Full pipeline for importing transactions from a CSV file.
 
@@ -213,7 +214,13 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         import_dir: The directory where the csv file is located.
 
     Returns:
-        The number of new transactions successfully imported.
+        A dictionary containing the import results:
+        - 'filename': The name of the CSV file.
+        - 'format_name': The name of the detected format.
+        - 'imported_count': Number of new transactions successfully imported.
+        - 'skipped_count': Number of duplicates skipped.
+        - 'archived': Boolean indicating if the source file was archived.
+        - 'error': Error message if detection failed.
     """
     formats = engine.config.get('importer', {}).get('formats', [])
     
@@ -244,31 +251,59 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
         except Exception:
             continue
 
+    filename = os.path.basename(csv_path)
     if not format_config:
         # Fallback: try to read with default comma just to show headers in error message
         try:
             _, headers = parse_csv(csv_path, delimiter=',')
         except Exception:
             headers = []
-        print(f"Error: Could not detect a matching format for '{os.path.basename(csv_path)}'.")
+        
+        error_msg = f"Could not detect a matching format for '{filename}'."
         if headers:
-            print(f"Available headers (with ',' delimiter): {', '.join(headers)}")
-        return 0
+            error_msg += f" Available headers (with ',' delimiter): {', '.join(headers)}"
+        
+        return {
+            "filename": filename,
+            "format_name": "Unknown",
+            "imported_count": 0,
+            "skipped_count": 0,
+            "archived": False,
+            "error": error_msg
+        }
 
-    print(f"Detected format: {format_config.get('name', 'Unknown')}")
-
+    format_name = format_config.get('name', 'Unknown')
     new_transactions_count = 0
     skipped_transactions_count = 0  # To count duplicates
+    
+    # Track occurrences of identical transactions in this file
+    transaction_counts = {}
+
     for record in raw_records:
         try:
             normalized_record = normalize_transaction(record, format_config, engine)
             
+            # Create a tracking key
+            track_key = (
+                normalized_record['transaction_date'], 
+                normalized_record['description'], 
+                normalized_record['amount']
+            )
+            
+            # Get current count and increment
+            occurrence = transaction_counts.get(track_key, 0)
+            transaction_counts[track_key] = occurrence + 1
+            
+            # Generate the new hash with the occurrence counter
+            file_hash = generate_transaction_hash(track_key[0], track_key[1], track_key[2], occurrence)
+
             # The updated add_expense returns False for duplicates
             was_added = engine.add_expense(
                 date=normalized_record['transaction_date'],
                 description=normalized_record['description'],
                 amount=normalized_record['amount'],
-                category=normalized_record['category']
+                category=normalized_record['category'],
+                unique_hash=file_hash
             )
             
             if was_added:
@@ -277,28 +312,27 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
                 # This is now the specific check for a duplicate
                 skipped_transactions_count += 1
 
-        except ValueError as e:
+        except ValueError:
             # Catches normalization errors
-            print(f"Skipping record due to normalization error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
-        except RuntimeError as e:
+        except RuntimeError:
             # Catches database or encryption errors from the engine
-            print(f"Skipping record due to a critical error: {record} -> {e}")
             skipped_transactions_count += 1
             continue
 
-    # After successful import, show a summary
-    print(f"\nImport Summary for '{os.path.basename(csv_path)}':")
-    print(f"  - Successfully imported: {new_transactions_count} transactions")
-    print(f"  - Skipped (duplicates): {skipped_transactions_count} transactions")
-
-    # Finally, delete the imported CSV file
+    # Finally, archive the imported CSV file
+    archived = False
     try:
-        # Pass the directory from the engine's config to ensure safe deletion
-        delete_file(csv_path, import_dir)
-        print(f"  - Deleted source file: '{os.path.basename(csv_path)}'")
-    except RuntimeError as e:
-        print(f"  - Warning: Could not delete source file: {e}")
+        archive_file(csv_path, import_dir)
+        archived = True
+    except RuntimeError:
+        pass
 
-    return new_transactions_count
+    return {
+        "filename": filename,
+        "format_name": format_name,
+        "imported_count": new_transactions_count,
+        "skipped_count": skipped_transactions_count,
+        "archived": archived
+    }

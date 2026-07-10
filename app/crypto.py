@@ -1,4 +1,5 @@
 import os
+import hashlib
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 import argon2.low_level
@@ -122,3 +123,10 @@ def generate_salt() -> bytes:
         A new 16-byte salt.
     """
     return get_random_bytes(ARGON2_SALT_LEN)
+
+def generate_transaction_hash(date: str, description: str, amount: float, occurrence: int) -> str:
+    """
+    Generates a unique SHA-256 hash for a transaction.
+    """
+    unique_string = f"{date}-{description}-{amount}-{occurrence}"
+    return hashlib.sha256(unique_string.encode('utf-8')).hexdigest()

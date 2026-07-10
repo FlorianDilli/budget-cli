@@ -133,3 +133,34 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # payment_month     = 1  # January
 # start_date        = "2023-01-01"
 # end_date          = "2023-12-31"
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ PRICE CHANGES OVER TIME (amount_history)                                  │
+# │ If a recurring transaction's amount changes over time (e.g. a             │
+# │ subscription price increase), you do NOT need to duplicate the            │
+# │ entry with start/end dates. Keep one entry and list the past              │
+# │ prices under `amount_history`. Each item has a `from` date (when          │
+# │ the new price took effect) and the `amount` for that period.              │
+# │                                                                           │
+# │ The app uses the most recent price whose `from` date is not after         │
+# │ the month being calculated. This keeps historical budgets                 │
+# │ accurate and prevents false "amount mismatch" alerts - no more            │
+# │ entering the same subscription twice.                                     │
+# │                                                                           │
+# │ `amount` is optional when `amount_history` is given. If omitted, the      │
+# │ most recent history entry is used as the current/default price.           │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# --- Example subscription with a price change ---
+# The base `amount` (12.99) is the current price. Older prices are listed in
+# `amount_history`, oldest first. Past months automatically use their historical
+# price, so you never have to enter the same subscription twice.
+# [[recurring_transactions]]
+# description       = "Netflix"
+# amount            = 12.99          # Current price
+# recurrence_months = 1
+# amount_history = [
+#   { from = "2022-01-01", amount = 7.99 },
+#   { from = "2024-06-01", amount = 10.99 },
+#   { from = "2025-03-01", amount = 12.99 },
+# ]
