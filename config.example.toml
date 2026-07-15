@@ -33,6 +33,15 @@ round_amounts       = false    # If true, all amounts will be displayed as round
 # │   Example: "31.12.2023" would be "%d.%m.%Y"                                │
 # │ - `decimal_separator`: The character for decimals (default: ".").          │
 # │ - `thousands_separator`: The character for thousands (default: none).      │
+# │                                                                           │
+# │ ACCOUNT BALANCE TRACKING (optional):                                       │
+# │ To see your "Total money I have" (all accounts + cash) in the Summary,    │
+# │ tell the app the balance of each account at ONE known moment in time.      │
+# │ The app then reconstructs the balance at any other date by adding all      │
+# │ transactions of that account imported after the snapshot date.             │
+# │   balance_snapshot      = 1234.56   # Balance at the snapshot date          │
+# │   balance_snapshot_date = "2025-01-01"  # YYYY-MM-DD (closing balance)      │
+# │ Leaving these out simply means that account is not included in the total.  │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [[importer.formats]]
 name               = "N26"
@@ -43,6 +52,11 @@ amount_column      = "Amount (EUR)"
 delimiter          = ","
 date_format        = "%Y.%m.%d"
 decimal_separator  = "."
+# Balance at one known moment (used for the "Total money I have" calculation).
+# The snapshot is treated as the CLOSING balance of that day, so transactions on
+# the snapshot date are already included in it.
+balance_snapshot      = 1234.56
+balance_snapshot_date = "2025-01-01"
 
 [[importer.formats]]
 name               = "GLS"
@@ -53,6 +67,8 @@ amount_column      = "Betrag"
 delimiter          = ";"
 date_format        = "%d.%m.%Y"
 decimal_separator  = ","
+# balance_snapshot      = 500.00
+# balance_snapshot_date = "2025-01-01"
 
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
@@ -116,6 +132,26 @@ recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions 
 # │       calculated based on which recurring transactions are active on the    │
 # │       first day of the respective month.                                    │
 # ╰───────────────────────────────────────────────────────────────────────────╯
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [cash]                                                                    │
+# │ Track the cash you have on hand. Unlike bank accounts, cash has no          │
+# │ transaction history, so you simply write down how much cash you have        │
+# │ whenever you think about it. Each entry records the amount and the date.    │
+# │                                                                             │
+# │ The app uses the most recent entry on or before the date being viewed       │
+# │ to figure out how much cash you had then.                                    │
+# │                                                                             │
+# │ This cash is added to your accounts' balances to produce the                 │
+# │ "Total money I have" figure shown in the Summary.                            │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[cash]
+# --- Example cash entries ---
+# entries = [
+#   { date = "2025-01-01", amount = 120.00 },
+#   { date = "2025-02-15", amount = 85.50  },
+# ]
 
 # --- Example Income ---
 # [[recurring_transactions]]

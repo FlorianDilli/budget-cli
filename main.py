@@ -77,6 +77,27 @@ def format_summary_amount(amount: Decimal, currency: str, theme: dict, round_amo
         return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
+def add_total_money_rows(summary_table, summary: dict, theme: dict, round_amounts: bool):
+    """Adds the 'Total money I have' line (plus a breakdown) to a summary table."""
+    total_money = summary.get('total_money')
+    if not total_money or not total_money.get('configured'):
+        return
+
+    currency = summary['currency']
+
+    summary_table.add_row(
+        "Total money I have:",
+        format_summary_amount(total_money['total'], currency, theme, round_amounts)
+    )
+
+    # Breakdown: account balances + cash
+    parts = []
+    for acc in total_money['accounts']:
+        parts.append(f"{acc['name']}: {acc['balance']:.2f} {currency}")
+    parts.append(f"Cash: {total_money['cash']:.2f} {currency}")
+    breakdown = Text("   +   ".join(parts), style="dim")
+    summary_table.add_row("", breakdown)
+
 def check_config_and_notify(engine: BudgetEngine) -> dict:
     """Checks if config changed and prints notification. Returns reload info or None."""
     reload_info = engine.check_and_reload_config_if_changed()
@@ -112,6 +133,7 @@ def show_main_dashboard(engine: BudgetEngine):
     summary_table.add_row("Available to Spend:", format_summary_amount(summary['available_to_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
     summary_table.add_row("Monthly Budget:", format_summary_amount(summary['allowed_monthly_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
     summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
+    add_total_money_rows(summary_table, summary, theme, engine.config.get('user', {}).get('round_amounts', False))
     
     console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {latest_month}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
     
@@ -319,7 +341,8 @@ def show_history_view(engine: BudgetEngine):
         summary_table.add_row("Sum of non-recurring transactions:", format_summary_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
         if 'total_transactions_sum' in summary:
             summary_table.add_row("Sum of all transactions in month:", format_summary_amount(summary['total_transactions_sum'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-        
+        add_total_money_rows(summary_table, summary, theme, engine.config.get('user', {}).get('round_amounts', False))
+
         console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
 
         # --- Progress Bar ---
@@ -544,11 +567,15 @@ def show_monthly_overview(engine: BudgetEngine):
         ))
         console.print()
 
+    has_total_money = any(s.get('total_money', {}).get('configured') for s in summaries)
+
     table = Table(expand=True, border_style=theme['main_color'], show_lines=True)
     table.add_column("Month", style=theme['accent_color'])
     table.add_column("Monthly Budget", justify="right")
     table.add_column("Sum of all transactions", justify="right")
     table.add_column("Available to Spend", justify="right")
+    if has_total_money:
+        table.add_column("Total money I have", justify="right")
     table.add_column("How much budget is left")
 
     for s in summaries:
@@ -608,7 +635,13 @@ def show_monthly_overview(engine: BudgetEngine):
         usage_grid = Table.grid(padding=(0, 1))
         usage_grid.add_row(progress_bar, Text(progress_text, style=theme['main_color']))
 
-        table.add_row(month_title, budget_text, spent_text, remaining_text, usage_grid)
+        if has_total_money:
+            total_money_text = format_summary_amount(
+                s['total_money']['total'], s['currency'], theme, round_amounts
+            )
+            table.add_row(month_title, budget_text, spent_text, remaining_text, total_money_text, usage_grid)
+        else:
+            table.add_row(month_title, budget_text, spent_text, remaining_text, usage_grid)
 
     console.print(table)
     Prompt.ask("\nPress Enter to return to the main menu.")

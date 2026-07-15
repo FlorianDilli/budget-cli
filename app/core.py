@@ -36,9 +36,12 @@ class BudgetEngine:
         self._config_mtime = os.path.getmtime(self.config_path)
 
         self._get_recurring_transactions() # Validate recurring transactions on init
+        self._get_account_snapshots()       # Validate account balance snapshots on init
+        self._get_cash_entries()            # Validate cash entries on init
 
         self._connect_to_db()
         self._verify_password()
+        self._backfill_accounts()           # Attribute untagged transactions to accounts
 
     def check_and_reload_config_if_changed(self) -> Dict[str, Any]:
         """
@@ -596,6 +599,255 @@ class BudgetEngine:
 
         return monthly_expenses, alerts, processed_transactions
 
+    # ╭───────────────────────────────────────────────────────────────────────╮
+    # │ TOTAL MONEY / ACCOUNT BALANCE TRACKING                                 │
+    # │                                                                       │
+    # │ The user records, per bank account, the balance at one known moment    │
+    # │ in time (`balance_snapshot` + `balance_snapshot_date`) in the toml file  │
+    # │ next to the CSV format definition. From that snapshot, the balance at  │
+    # │ any other moment is reconstructed by adding all transactions of that   │
+    # │ account that occurred after the snapshot. Cash is tracked separately    │
+    # │ as a list of (date, amount) entries.                                    │
+    # ╰───────────────────────────────────────────────────────────────────────╯
+
+    def _get_account_snapshots(self) -> List[Dict[str, Any]]:
+        """
+        Parses and validates the per-account balance snapshots from the config.
+
+        Each `[[importer.formats]]` may define:
+            balance_snapshot       = 1234.56   # Account balance at the snapshot date
+            balance_snapshot_date  = "2025-01-01"  # YYYY-MM-DD
+
+        Both fields are required together. The returned balance ignores any
+        transactions that happened *on* the snapshot date (the snapshot is
+        treated as the closing balance of that day), so only transactions dated
+        strictly after it are added.
+
+        Returns:
+            A list of {name, balance_snapshot (Decimal), balance_snapshot_date (datetime)}.
+        """
+        formats = self.config.get('importer', {}).get('formats', [])
+        snapshots = []
+        for fmt in formats:
+            name = fmt.get('name', 'Unknown')
+            if 'balance_snapshot' not in fmt:
+                continue
+
+            balance = fmt.get('balance_snapshot')
+            date_str = fmt.get('balance_snapshot_date')
+
+            if balance is None or date_str is None:
+                raise ValueError(
+                    f"Account '{name}' defines an `balance_snapshot` but is missing "
+                    f"`balance_snapshot_date` (or vice versa). Both are required."
+                )
+
+            try:
+                snapshot_date = datetime.strptime(date_str, '%Y-%m-%d')
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Invalid `balance_snapshot_date` for account '{name}': '{date_str}'. "
+                    f"Use YYYY-MM-DD."
+                )
+
+            if not isinstance(balance, (int, float)):
+                raise ValueError(
+                    f"Invalid `balance_snapshot` for account '{name}': must be a number."
+                )
+
+            snapshots.append({
+                'name': name,
+                'balance_snapshot': Decimal(str(balance)),
+                'balance_snapshot_date': snapshot_date,
+            })
+
+        return snapshots
+
+    def _get_cash_entries(self) -> List[Dict[str, Any]]:
+        """
+        Parses and validates the cash tracking entries from the config.
+
+        The `[cash]` section may define:
+            [[cash.entries]]
+            date   = "2025-01-01"   # YYYY-MM-DD
+            amount = 120.00         # Cash on hand at that date
+
+        Returns:
+            A list of {date (datetime), amount (Decimal)} sorted by date.
+        """
+        cash_cfg = self.config.get('cash')
+        if not cash_cfg:
+            return []
+
+        entries = cash_cfg.get('entries', []) if isinstance(cash_cfg, dict) else []
+
+        result = []
+        for entry in entries:
+            amount = entry.get('amount')
+            date_str = entry.get('date')
+
+            if amount is None or date_str is None:
+                raise ValueError(
+                    "Each cash entry must define both `date` (YYYY-MM-DD) and `amount`."
+                )
+
+            try:
+                entry_date = datetime.strptime(date_str, '%Y-%m-%d')
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Invalid date in cash entry: '{date_str}'. Use YYYY-MM-DD."
+                )
+
+            if not isinstance(amount, (int, float)):
+                raise ValueError(
+                    f"Invalid amount in cash entry dated '{date_str}': must be a number."
+                )
+
+            result.append({'date': entry_date, 'amount': Decimal(str(amount))})
+
+        result.sort(key=lambda e: e['date'])
+        return result
+
+    def _backfill_accounts(self) -> int:
+        """
+        Attributes existing untagged transactions to an account.
+
+        Transactions imported before account tagging existed have `account = NULL`
+        and are therefore invisible to balance reconstruction. When it is safe to
+        do so, we assign them all to a single target account:
+
+        - If the config defines exactly one importer format, that format is the
+          target.
+        - If multiple formats exist but only one has a `balance_snapshot`, that
+          account is the target (the other accounts aren't part of the total
+          money calculation anyway).
+
+        When several accounts with snapshots exist, we cannot know which untagged
+        transaction belongs to which, so we leave them untagged.
+
+        Returns the number of transactions that were attributed.
+        """
+        formats = self.config.get('importer', {}).get('formats', [])
+        if not formats:
+            return 0
+
+        target = None
+        if len(formats) == 1:
+            target = formats[0].get('name')
+        else:
+            snapshot_names = [f.get('name') for f in formats if 'balance_snapshot' in f]
+            if len(snapshot_names) == 1:
+                target = snapshot_names[0]
+
+        if not target:
+            return 0
+
+        return self.db.backfill_account(target)
+
+    def get_cash_at(self, as_of_date: datetime, entries: List[Dict[str, Any]] = None) -> Decimal:
+        """
+        Returns the cash on hand as of a given date.
+
+        Uses the most recent cash entry whose date is on or before `as_of_date`.
+        If no such entry exists, returns 0 (no cash has been recorded yet).
+
+        Args:
+            as_of_date: The date for which the cash amount is requested.
+            entries: Optional pre-parsed cash entries (avoids re-parsing).
+
+        Returns:
+            The cash amount as a Decimal.
+        """
+        if entries is None:
+            entries = self._get_cash_entries()
+
+        best = None
+        for entry in entries:
+            if entry['date'] <= as_of_date:
+                best = entry['amount']
+
+        return best if best is not None else Decimal('0')
+
+    def _sum_account_transactions(
+        self, account: str, snapshot_date: datetime, as_of_date: datetime
+    ) -> Decimal:
+        """
+        Net transaction flow for an account between the snapshot and `as_of_date`.
+
+        The snapshot is the closing balance of `snapshot_date`, so transactions on
+        that day are treated as already included in it (excluded from the flow).
+
+        - If `as_of_date` is AFTER the snapshot: returns the sum of transactions
+          strictly after the snapshot up to and including `as_of_date` (going
+          forward in time).
+        - If `as_of_date` is BEFORE the snapshot: returns the NEGATIVE sum of
+          transactions strictly after `as_of_date` up to and including the snapshot
+          (unwinding the balance backwards in time). This makes a "current" snapshot
+          usable to reconstruct the balance of any past date.
+        """
+        one_day = self._one_day()
+
+        if as_of_date >= snapshot_date:
+            # Forward: sum of transactions in (snapshot_date, as_of_date]
+            start_str = (snapshot_date + one_day).strftime('%Y-%m-%d')
+            end_str = as_of_date.strftime('%Y-%m-%d')
+            negate = False
+        else:
+            # Backward: sum of transactions in (as_of_date, snapshot_date], negated
+            start_str = (as_of_date + one_day).strftime('%Y-%m-%d')
+            end_str = snapshot_date.strftime('%Y-%m-%d')
+            negate = True
+
+        rows = self.db.get_account_transactions(account, start_str, end_str)
+        decrypted = self._decrypt_transactions(rows)
+        flow = sum(t['amount'] for t in decrypted)
+        return -flow if negate else flow
+
+    @staticmethod
+    def _one_day():
+        from datetime import timedelta
+        return timedelta(days=1)
+
+    def get_total_money_at(self, as_of_date: datetime) -> Dict[str, Any]:
+        """
+        Calculates the total amount of money the user has as of a given date.
+
+        This is the sum of every configured bank account's balance (reconstructed
+        from its snapshot plus subsequent transactions) plus the cash on hand.
+
+        Args:
+            as_of_date: The date for which the total should be calculated.
+
+        Returns:
+            A dict with:
+                configured: bool  – whether any account or cash is configured
+                accounts:   list  – [{name, balance}] per configured account
+                cash:       Decimal
+                total:      Decimal
+        """
+        snapshots = self._get_account_snapshots()
+        cash_entries = self._get_cash_entries()
+        configured = bool(snapshots) or bool(cash_entries)
+
+        accounts = []
+        total = Decimal('0')
+        for snap in snapshots:
+            balance = snap['balance_snapshot'] + self._sum_account_transactions(
+                snap['name'], snap['balance_snapshot_date'], as_of_date
+            )
+            accounts.append({'name': snap['name'], 'balance': balance})
+            total += balance
+
+        cash = self.get_cash_at(as_of_date, cash_entries)
+        total += cash
+
+        return {
+            'configured': configured,
+            'accounts': accounts,
+            'cash': cash,
+            'total': total,
+        }
+
 
     def get_dashboard_summary(self) -> Dict[str, Any]:
         """
@@ -643,6 +895,10 @@ class BudgetEngine:
         total_transactions_sum = sum(t['amount'] for t in decrypted_transactions)
 
         surplus = available_to_spend - normalized_monthly_flow
+
+        # Total money (accounts + cash) as of the end of the displayed period.
+        total_money = self.get_total_money_at(end_of_period)
+
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
@@ -651,7 +907,8 @@ class BudgetEngine:
             "currency": self.config['user']['currency_symbol'],
             "latest_month": latest_month_str,
             "surplus": surplus,
-            "alerts": alerts
+            "alerts": alerts,
+            "total_money": total_money,
         }
 
     def get_monthly_summary(self, year: str, month: str) -> Dict[str, Any]:
@@ -675,6 +932,19 @@ class BudgetEngine:
         total_transactions_sum = sum(t['amount'] for t in decrypted_transactions)
 
         surplus = available_to_spend - normalized_monthly_flow
+
+        # Total money (accounts + cash) as of the end of the displayed month
+        # (or today if it's the current month).
+        today = datetime.now()
+        if int(year) == today.year and int(month) == today.month:
+            end_of_period = today
+        else:
+            import calendar
+            _, last_day = calendar.monthrange(int(year), int(month))
+            end_of_period = datetime(int(year), int(month), last_day)
+
+        total_money = self.get_total_money_at(end_of_period)
+
         return {
             "allowed_monthly_spend": normalized_monthly_flow,
             "monthly_expenses": monthly_expenses,
@@ -682,7 +952,8 @@ class BudgetEngine:
             "total_transactions_sum": total_transactions_sum,
             "currency": self.config['user']['currency_symbol'],
             "surplus": surplus,
-            "alerts": alerts
+            "alerts": alerts,
+            "total_money": total_money,
         }
 
     def get_all_months_summary(self) -> List[Dict[str, Any]]:
@@ -700,6 +971,7 @@ class BudgetEngine:
                 "budget": summary['allowed_monthly_spend'],
                 "total_spent": summary['total_transactions_sum'],
                 "available": summary['available_to_spend'],
+                "total_money": summary['total_money'],
                 "currency": summary['currency']
             })
         
@@ -724,10 +996,14 @@ class BudgetEngine:
         # Default category if no rules match
         return "Uncategorized"
 
-    def add_expense(self, date: str, description: str, amount: float, category: str, unique_hash: str = None) -> bool:
+    def add_expense(self, date: str, description: str, amount: float, category: str, unique_hash: str = None, account: str = None) -> bool:
         """
         Adds a new expense to the database after checking for duplicates.
         Encrypts sensitive fields before storing.
+
+        Args:
+            account: An optional identifier (the importer format name) linking the
+                     transaction to a specific bank account for balance tracking.
 
         Returns:
             True if the transaction was added successfully, False otherwise.
@@ -745,9 +1021,21 @@ class BudgetEngine:
             unique_hash = generate_transaction_hash(date, description, amount, occurrence)
 
         # Check for duplicates before inserting
-        existing = self.db.fetch_all("SELECT 1 FROM transactions WHERE unique_hash = ?", (unique_hash,))
+        existing = self.db.fetch_all(
+            "SELECT id, account FROM transactions WHERE unique_hash = ?", (unique_hash,)
+        )
         if existing:
-            return False  # Duplicate found
+            # Duplicate found. If this import knows which account the transaction
+            # belongs to but the stored row is still untagged (e.g. it was imported
+            # before account tagging existed), backfill that single column. This
+            # lets a re-import attribute historical transactions to their bank so
+            # the "Total money I have" reconstruction can use them.
+            if account is not None and existing[0][1] is None:
+                self.db.execute_query(
+                    "UPDATE transactions SET account = ? WHERE unique_hash = ?",
+                    (account, unique_hash),
+                )
+            return False  # Duplicate found (no new row inserted)
 
         # Determine if recurring - check all recurring transactions, not just unique descriptions
         is_recurring = self._is_transaction_recurring(description, date)
@@ -765,10 +1053,10 @@ class BudgetEngine:
         try:
             self.db.execute_query(
                 """
-                INSERT INTO transactions (transaction_date, description, amount, category, unique_hash, is_recurring)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO transactions (transaction_date, description, amount, category, unique_hash, is_recurring, account)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash, is_recurring)
+                (date, encrypted_desc.hex(), encrypted_amount.hex(), encrypted_category.hex(), unique_hash, is_recurring, account)
             )
             return True
         except Exception as e:
@@ -1041,11 +1329,14 @@ class BudgetEngine:
         """
         # Step 1: Reload the configuration
         self.config = self._load_config()
-        
+
         # Step 2: Re-apply user-specific settings
         self.reapply_user_settings()
-        
-        # Step 3: Re-apply categorization rules
+
+        # Step 3: Attribute untagged transactions to accounts (balance tracking)
+        self._backfill_accounts()
+
+        # Step 4: Re-apply categorization rules
         return self.recategorize_transactions()
 
     def reapply_user_settings(self) -> None:

@@ -105,6 +105,9 @@ class DatabaseManager:
             if 'end_date' not in columns:
                 self.conn.execute("ALTER TABLE transactions ADD COLUMN end_date TEXT;")
 
+            if 'account' not in columns:
+                self.conn.execute("ALTER TABLE transactions ADD COLUMN account TEXT;")
+
             self.conn.commit()
         except sqlite3.Error:
             # This might fail if the table is empty or in other rare cases.
@@ -219,6 +222,37 @@ class DatabaseManager:
             if self.conn:
                 self.conn.row_factory = original_factory
     
+    def get_account_transactions(self, account: str, start_date: str, end_date: str) -> List[Any]:
+        """
+        Fetches all transactions belonging to a given account within a date range.
+
+        Args:
+            account: The account identifier (the importer format name).
+            start_date: Inclusive lower bound (YYYY-MM-DD).
+            end_date: Inclusive upper bound (YYYY-MM-DD).
+
+        Returns:
+            A list of transaction rows (as sqlite3.Row) for that account.
+        """
+        query = """
+        SELECT * FROM transactions
+        WHERE account = ? AND transaction_date >= ? AND transaction_date <= ?
+        ORDER BY transaction_date ASC, id ASC
+        """
+
+        original_factory = self.conn.row_factory
+        self.conn.row_factory = sqlite3.Row
+
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(query, (account, start_date, end_date))
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            raise RuntimeError(f"Failed to fetch account transactions: {e}")
+        finally:
+            if self.conn:
+                self.conn.row_factory = original_factory
+
     def get_available_months(self) -> List[Tuple[str, str]]:
         """Returns a list of distinct year-month pairs from the transactions."""
         query = """
@@ -227,6 +261,29 @@ class DatabaseManager:
         ORDER BY 1 DESC, 2 DESC
         """
         return self.fetch_all(query)
+
+    def backfill_account(self, account: str) -> int:
+        """
+        Assigns `account` to all transactions that have no account set yet.
+
+        This is used to attribute transactions imported before account tagging
+        existed, so balance reconstruction can see them. Returns the number of
+        rows updated.
+        """
+        if not self.conn:
+            raise RuntimeError("Database connection not established.")
+
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE transactions SET account = ? WHERE account IS NULL",
+                (account,)
+            )
+            self.conn.commit()
+            return cursor.rowcount
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            raise RuntimeError(f"Failed to backfill account: {e}")
 
     def delete_transactions_for_month(self, year: str, month: str) -> int:
         """Deletes all transactions for a given year and month."""

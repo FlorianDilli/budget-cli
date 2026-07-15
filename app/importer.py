@@ -303,7 +303,8 @@ def import_transactions(engine: BudgetEngine, csv_path: str, import_dir: str) ->
                 description=normalized_record['description'],
                 amount=normalized_record['amount'],
                 category=normalized_record['category'],
-                unique_hash=file_hash
+                unique_hash=file_hash,
+                account=format_name
             )
             
             if was_added:

@@ -48,6 +48,43 @@ If you have a recurring transaction that occurs less than once a month (e.g., `r
 
 When the actual large transaction occurs (e.g., you pay the full $120 in January), the app detects it and **ignores it** in the "Available to Spend" calculation. This prevents the full amount from being deducted again, as you've already "saved" for it throughout the year.
 
+### How is the "Total money I have" amount calculated?
+
+The Summary (on the Dashboard and in the History view) can show a **"Total money I have"** figure. This is the sum of all your bank account balances **plus** the cash you have on hand.
+
+Bank accounts have no running balance stored in the app—only individual transactions. So for each account you tell the app the balance at **one known moment in time**, and the app reconstructs the balance at any other date from the transactions of that account.
+
+This works in **both directions**: if the snapshot is *before* the date you're viewing, the app adds the transactions that happened after the snapshot; if the snapshot is *after* (e.g. you recorded today's balance but are looking at a past month), the app subtracts the transactions that happened between that past date and the snapshot. So you can record your current balance once and the app will correctly show your total money for any earlier or later month.
+
+You configure this in `config.toml` next to each bank's CSV format:
+
+```toml
+[[importer.formats]]
+name               = "N26"
+date_column        = "Value Date"
+# ... other format fields ...
+balance_snapshot      = 1234.56        # The account balance at the snapshot date
+balance_snapshot_date = "2025-01-01"   # YYYY-MM-DD (treated as the closing balance)
+```
+
+The `balance_snapshot_date` is treated as the **closing balance of that day**, so any transactions dated *on* that day are already included in the snapshot and are not counted twice—only transactions dated strictly after it are added. If you leave these two fields out, that account is simply excluded from the total.
+
+The app assigns every imported transaction to the account it came from (using the format's `name`), so make sure each `[[importer.formats]]` has a unique `name`.
+
+### How do I track cash?
+
+Cash has no transaction history, so you just write down how much cash you have whenever you think about it. Add a `[cash]` section to `config.toml` with a list of `date`/`amount` entries:
+
+```toml
+[cash]
+entries = [
+  { date = "2025-01-01", amount = 120.00 },
+  { date = "2025-02-15", amount = 85.50  },
+]
+```
+
+For any given date, the app uses the most recent cash entry on or before that date. This cash is added to your accounts' balances to produce the "Total money I have" figure.
+
 ### What are "Budget Alerts"?
 
 Budget Alerts appear when the app detects an anomaly in your recurring transactions:
