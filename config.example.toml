@@ -18,6 +18,18 @@
 currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
 round_amounts       = false    # If true, all amounts will be displayed as rounded values
 
+# Day of the month (1-31) used to measure "Total money I have" in the Monthly
+# Overview table. Because your balance is a wave (rent early, paycheck late),
+# measuring every month at the same point in the cycle makes the numbers
+# comparable. For example:
+#   - set to 28 to measure just before payday (your typical peak)
+#   - set to 2  to measure just after rent (your typical trough)
+# For the current month, the configured day is never in the future: if it hasn't
+# happened yet, today is used instead.
+# Leave at 0 (or remove the line) for the default behaviour: today for the
+# current month, or the last day of the month for past months.
+total_money_as_of_day = 0
+
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [importer]                                                                │

@@ -1,9 +1,10 @@
 import os
 import toml
 import shutil
+import calendar
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 from app.database import DatabaseManager
 from app.crypto import derive_key, encrypt, decrypt, generate_salt, generate_transaction_hash
@@ -271,14 +272,14 @@ class BudgetEngine:
             if start_date:
                 try:
                     parsed_start = datetime.strptime(start_date, '%Y-%m-%d')
-                except ValueError:
+                except (ValueError, TypeError):
                     raise ValueError(f"Invalid 'start_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
 
             end_date = t.get('end_date')
             if end_date:
                 try:
                     parsed_end = datetime.strptime(end_date, '%Y-%m-%d')
-                except ValueError:
+                except (ValueError, TypeError):
                     raise ValueError(f"Invalid 'end_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
 
                 if parsed_start and parsed_end < parsed_start:
@@ -911,6 +912,54 @@ class BudgetEngine:
             "total_money": total_money,
         }
 
+    def get_total_money_as_of_day(self) -> Optional[int]:
+        """
+        Reads the optional `user.total_money_as_of_day` config setting.
+
+        This lets the user pick a fixed day-of-month at which "Total money I have"
+        is measured in the Monthly Overview, so months are compared at the same
+        point in the income/expense cycle.
+
+        Returns:
+            An int between 1 and 31, or None if unset/invalid (meaning: use the
+            default behaviour of today for the current month and month-end for
+            past months).
+        """
+        raw = self.config.get('user', {}).get('total_money_as_of_day')
+        if raw is None:
+            return None
+        try:
+            day = int(raw)
+        except (ValueError, TypeError):
+            return None
+        if day < 1 or day > 31:
+            return None
+        return day
+
+    def get_total_money_as_of_date(self, year: int, month: int) -> datetime:
+        """
+        Determines the date used to measure "Total money I have" for a given month
+        in the Monthly Overview.
+
+        Honours the optional `user.total_money_as_of_day` config. For the current
+        month, the configured day is never in the future: if it hasn't occurred
+        yet, today is used instead.
+        """
+        today = datetime.now()
+        is_current_month = (year == today.year and month == today.month)
+        _, last_day = calendar.monthrange(year, month)
+
+        configured_day = self.get_total_money_as_of_day()
+        if configured_day is None:
+            # Default: today for the current month, last day of month otherwise.
+            return today if is_current_month else datetime(year, month, last_day)
+
+        day = min(configured_day, last_day)
+        target = datetime(year, month, day)
+        if is_current_month and target > today:
+            return today
+        return target
+
     def get_monthly_summary(self, year: str, month: str) -> Dict[str, Any]:
         """
         Calculates and returns the main dashboard metrics for a specific month.
@@ -933,15 +982,10 @@ class BudgetEngine:
 
         surplus = available_to_spend - normalized_monthly_flow
 
-        # Total money (accounts + cash) as of the end of the displayed month
-        # (or today if it's the current month).
-        today = datetime.now()
-        if int(year) == today.year and int(month) == today.month:
-            end_of_period = today
-        else:
-            import calendar
-            _, last_day = calendar.monthrange(int(year), int(month))
-            end_of_period = datetime(int(year), int(month), last_day)
+        # Total money (accounts + cash) as of the configured overview date for
+        # this month (today for the current month if unset, else the configured
+        # day-of-month, defaulting to month-end for past months).
+        end_of_period = self.get_total_money_as_of_date(int(year), int(month))
 
         total_money = self.get_total_money_at(end_of_period)
 

@@ -457,8 +457,10 @@ def run_importer(engine: BudgetEngine):
     if Confirm.ask("\n [dim]Do you want to proceed with the import? [y/N][/dim]"):
         total_imported = 0
         for f in csv_files:
-            result = import_transactions(engine, f, STATEMENTS_DIR)
-            
+            basename = os.path.basename(f)
+            with console.status(f"[bold {theme['accent_color']}]Importing {basename}…[/bold {theme['accent_color']}]", spinner="dots"):
+                result = import_transactions(engine, f, STATEMENTS_DIR)
+
             console.print()
             console.print(Rule(f"[bold] {result.get('filename', os.path.basename(f))} [/bold]", style=theme['main_color']))
             
@@ -500,8 +502,6 @@ def run_importer(engine: BudgetEngine):
             expand=False,
             padding=(1, 4)
         ))
-    
-    Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
     
     Prompt.ask("\n[dim][Enter] Back to menu[/dim]")
 
@@ -575,7 +575,12 @@ def show_monthly_overview(engine: BudgetEngine):
     table.add_column("Sum of all transactions", justify="right")
     table.add_column("Available to Spend", justify="right")
     if has_total_money:
-        table.add_column("Total money I have", justify="right")
+        configured_day = engine.get_total_money_as_of_day()
+        if configured_day:
+            money_header = f"Total money I have (as of day {configured_day})"
+        else:
+            money_header = "Total money I have"
+        table.add_column(money_header, justify="right")
     table.add_column("How much budget is left")
 
     for s in summaries:
@@ -807,6 +812,11 @@ def main():
             else:
                 console.print(f"\n[bold {theme.get('negative', 'red')}]Error:[/bold {theme.get('negative', 'red')}] {e}")
                 return
+        except ValueError as e:
+            console.print(f"\n[bold {theme.get('negative', 'red')}]Invalid configuration in {CONFIG_PATH}:[/bold {theme.get('negative', 'red')}]")
+            console.print(f"[dim]{e}[/dim]")
+            console.print(f"[yellow]Please fix your config.toml and try again.[/yellow]\n")
+            return
         except Exception as e:
             console.print(f"\n[bold {theme.get('negative', 'red')}]Error:[/bold {theme.get('negative', 'red')}] Failed to initialize. Corrupted data?")
             console.print(f"[dim]{e}[/dim]")
