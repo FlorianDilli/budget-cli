@@ -1,21 +1,52 @@
 import os
 import sys
+import io
 import getpass
+import termios
+import tty
 from datetime import datetime
 from decimal import Decimal
-from simple_term_menu import TerminalMenu
-from typing import Tuple
+from typing import Tuple, Optional
 
-from rich.console import Console
-from rich.table import Table
-from rich.progress_bar import ProgressBar
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
-from rich.prompt import Prompt, Confirm
-from rich.rule import Rule
+from rich.align import Align
+from rich.box import SQUARE, DOUBLE
 
-from app.core import BudgetEngine
-from app.importer import discover_csv_files, import_transactions
+# --- Dependency-safe imports ---
+# If a required third-party package is missing, show a friendly panel
+# instead of a raw stack trace.
+try:
+    from simple_term_menu import TerminalMenu
+    from rich.table import Table
+    from rich.progress_bar import ProgressBar
+    from rich.prompt import Prompt, Confirm
+    from rich.rule import Rule
+
+    from app.core import BudgetEngine
+    from app.importer import discover_csv_files, import_transactions
+    from app.banner import render_banner
+except ImportError as e:
+    _console = Console()
+    _missing = getattr(e, "name", None) or str(e).split()[-1] or "a required package"
+    _console.print(
+        Panel(
+            Text.from_markup(
+                f"[bold red]Missing dependency:[/bold red] [yellow]{_missing}[/yellow]\n\n"
+                "Budget CLI needs a few Python packages to run.\n"
+                "Install them with:\n\n"
+                "    [bold cyan]pip install -r requirements.txt[/bold cyan]\n\n"
+                "If you already did, make sure you are using the same Python\n"
+                "environment that you installed the packages into."
+            ),
+            title="[bold red]Budget CLI could not start[/bold red]",
+            border_style="red",
+            expand=False,
+            padding=(1, 2),
+        )
+    )
+    sys.exit(1)
 
 # --- Constants ---
 USER_DATA_BASE = os.getenv("BUDGET_DATA_PATH", "userdata")
@@ -27,6 +58,21 @@ CONFIG_PATH = os.path.join(USER_DATA_BASE, "config.toml")
 console = Console()
 
 
+def build_menu(items, title=""):
+    """Constructs a TerminalMenu with a consistent navigation footer.
+
+    Pressing ESC no longer exits the application: a None result is treated
+    by the callers as "stay on the current screen".
+    """
+    menu = TerminalMenu(
+        items,
+        title=title,
+        quit_keys=("q", "ctrl-g"),
+        show_shortcut_hints=True,
+    )
+    return menu
+
+
 def clear_terminal_full():
     """Completely clear the terminal, including scrollback."""
     if os.name == "nt":
@@ -35,31 +81,179 @@ def clear_terminal_full():
         sys.stdout.write("\033c")
         sys.stdout.flush()
 
-def show_password_prompt(is_initial_setup: bool = False, theme: dict = None) -> str:
-    """Prompts the user for their master password."""
-    
-    # Use default theme if not provided
+def _render_login_screen(theme, info_text, prompt_label, mask, footer):
+    """Renders the complete login screen (outer border, banner, status panel,
+    authentication panel with the live masked password, and a dimmed footer)
+    to a string.
+
+    The AUTHENTICATION panel is given a fixed, generous size so it never
+    resizes while the user types; only the masked line inside it changes.
+    """
+    # Cap the visible mask length (extra length is simply not shown).
+    display_mask = mask[:20]
+    # A fixed, generous panel width keeps the box static while typing. The
+    # password line is padded with trailing spaces *after* the block cursor so
+    # its total width is constant; the block cursor therefore always sits
+    # right after the last typed character.
+    AUTH_WIDTH = 48
+    AUTH_FIELD = 6 + len(prompt_label) + 1 + 20 + 1  # indent + label + space + 20 mask + cursor
+    AUTH_INDENT = 6
+    status_line = Text.from_markup(f"[bold]STATUS:[/bold] {info_text}")
+    trailing = " " * max(0, AUTH_FIELD - (AUTH_INDENT + len(prompt_label) + 1 + len(display_mask) + 1))
+    auth_line = (
+        f"{' ' * AUTH_INDENT}{prompt_label} [red]{display_mask}[/red]█{trailing}"
+    )
+    auth_panel = Panel(
+        Align.left(Text.from_markup(auth_line, justify="left")),
+        title="[bold]AUTHENTICATION[/bold]",
+        border_style=theme["main_color"],
+        expand=False,
+        padding=(1, 4),
+        width=AUTH_WIDTH,
+    )
+
+    inner = Group(
+        Text(""),
+        Text(""),
+        Text(""),
+        render_banner_text(theme),
+        Align.center(status_line),
+        Text(""),
+        Text(""),
+        Align.center(auth_panel),
+        Text(""),
+        Text(""),
+        Text(""),
+    )
+
+    # Render at the *actual* terminal width so lines never wrap.
+    columns = _terminal_width()
+    cap = Console(
+        width=columns,
+        file=io.StringIO(),
+        color_system=console.color_system,
+        highlight=False,
+        force_terminal=True,
+    )
+    cap.print(
+        Panel(inner,         border_style=theme["accent_color"], box=DOUBLE, padding=(1, 2))
+    )
+    cap.print()
+    if footer:
+        cap.print(Text(footer, style="dim"))
+    cap.print()
+    return cap.file.getvalue()
+
+
+def _terminal_width() -> int:
+    """Returns the current terminal width, falling back to a safe default."""
+    try:
+        return os.get_terminal_size(sys.stdout.fileno()).columns
+    except (OSError, ValueError):
+        try:
+            return os.get_terminal_size().columns
+        except (OSError, ValueError):
+            return 80
+
+
+def read_masked_password(render_fn) -> str:
+    """Reads a password from the terminal without echoing it, rendering
+    each typed character as a red asterisk (inside the auth field) followed
+    by a solid block cursor.
+
+    The login screen (including the auth box) is drawn exactly once. On each
+    keystroke only the masked line inside the auth panel is overwritten in
+    place, so the box never redraws or resizes.
+
+    Falls back to getpass when the terminal is not interactive.
+    """
+    if not sys.stdin.isatty():
+        return getpass.getpass("Password: ")
+
+    password_chars: list[str] = []
+    mask = ""
+
+    # Draw the screen once and capture the rendered mask line so we can
+    # overwrite just that line later.
+    screen = render_fn(mask)
+    screen_lines = screen.split("\n")
+    # The auth mask line is the only line containing the prompt label.
+    mask_line_index = next(
+        (i for i, ln in enumerate(screen_lines) if "Password:" in ln), None
+    )
+    if mask_line_index is None:
+        # Fallback: redraw the whole screen each time.
+        def redraw():
+            sys.stdout.write("\033[2J\033[3J\033[H")
+            sys.stdout.write(render_fn(mask))
+            sys.stdout.write("\033[J")
+            sys.stdout.flush()
+        redraw()
+    else:
+        sys.stdout.write(screen)
+        sys.stdout.flush()
+
+    def update_mask_line():
+        if mask_line_index is None:
+            return
+        # Re-render only to obtain the new mask line (same width/position).
+        new_screen = render_fn(mask)
+        new_line = new_screen.split("\n")[mask_line_index]
+        # Move to the mask line, clear it, rewrite it.
+        sys.stdout.write(f"\033[{mask_line_index + 1};1H\033[K")
+        sys.stdout.write(new_line)
+        sys.stdout.flush()
+
+    try:
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        tty.setraw(fd)
+        try:
+            while True:
+                ch = sys.stdin.read(1)
+                if ch in ("\r", "\n"):
+                    break
+                elif ch == "\x03":  # Ctrl-C
+                    raise KeyboardInterrupt
+                elif ch == "\x7f" or ch == "\b":  # backspace
+                    if password_chars:
+                        password_chars.pop()
+                elif ch >= " ":  # printable
+                    password_chars.append(ch)
+                mask = "*" * len(password_chars)
+                update_mask_line()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (termios.error, OSError):
+        return getpass.getpass("Password: ")
+
+    return "".join(password_chars)
+
+
+def show_password_prompt(is_initial_setup: bool = False, theme: dict = None, footer: str = "") -> str:
+    """Prompts the user for their master password with a redesigned login layout."""
+
     if theme is None:
         theme = {"accent_color": "cyan", "main_color": "cyan"}
-    
-    if is_initial_setup:
-        prompt_message = "Please set a password for your budget file: "
-        info_text = "This password will be used to encrypt your new budget file."
-    else:
-        prompt_message = "Please enter your password: "
-        info_text = "The app is currently locked"
 
-    console.print(
-        Panel(
-            Text(info_text, justify="center"),
-            title=f"[bold {theme['accent_color']}]Budget CLI[/bold {theme['accent_color']}]",
-            border_style=theme['main_color']
-        )
+    if is_initial_setup:
+        info_text = "Set a password to encrypt your new budget file."
+    else:
+        info_text = "The app is currently locked."
+
+    prompt_label = "Password:"
+
+    password = read_masked_password(
+        lambda mask: _render_login_screen(theme, info_text, prompt_label, mask, footer)
     )
-    console.print()
-    console.print()
-    password = getpass.getpass(prompt_message)
     return password
+
+
+def render_banner_text(theme: dict = None) -> Text:
+    """Returns the (horizontally centered) Budget CLI ASCII banner as Text."""
+    from app.banner import BANNER_ART
+    accent = (theme or {}).get("accent_color", "cyan")
+    return Text(BANNER_ART, style=accent, justify="center")
 
 def format_amount(amount: Decimal, currency: str, theme: dict, round_amounts: bool, is_recurring: bool = False) -> Text:
     """Formats a transaction amount with appropriate color."""
@@ -94,28 +288,137 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
     """Checks if config changed and prints notification. Returns reload info or None."""
     reload_info = engine.check_and_reload_config_if_changed()
     if reload_info:
-        console.print(f"\n[dim]✓ Config auto-reloaded: {reload_info['count']} transactions updated[/dim]")
+        count = reload_info['count']
+        if count > 0:
+            console.print(
+                Panel(
+                    Text.from_markup(
+                        f"[green]✔ Your changes to [cyan]config.toml[/cyan] were applied automatically.[/green]\n"
+                        f"[dim]{count} transaction{'s' if count != 1 else ''} "
+                        f"{'were' if count != 1 else 'was'} re-categorized and re-checked.[/dim]"
+                    ),
+                    border_style="green",
+                    expand=False,
+                    padding=(0, 2),
+                )
+            )
+        else:
+            console.print(
+                Panel(
+                    Text.from_markup(
+                        "[green]✔ Your [cyan]config.toml[/cyan] changes were picked up.[/green]\n"
+                        "[dim]No transactions needed updating this time.[/dim]"
+                    ),
+                    border_style="green",
+                    expand=False,
+                    padding=(0, 2),
+                )
+            )
     return reload_info
+
+def format_reload_time(timestamp: float) -> str:
+    """Formats a config reload timestamp relative to now.
+
+    - Under an hour ago (same day): "X minutes ago"
+    - Over an hour ago (same day): "X hours ago"
+    - The previous calendar day: "yesterday at HH:MM"
+    - Older than that: the date ("YYYY-MM-DD at HH:MM")
+    """
+    if not timestamp:
+        return "unknown"
+
+    reloaded = datetime.fromtimestamp(timestamp)
+    now = datetime.now()
+    delta = now - reloaded
+
+    # Future timestamps (clock skew) or just now.
+    total_seconds = delta.total_seconds()
+    if total_seconds < 0:
+        return "just now"
+
+    same_day = reloaded.date() == now.date()
+
+    if same_day and total_seconds < 3600:
+        minutes = int(total_seconds // 60)
+        if minutes <= 0:
+            return "just now"
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+
+    if same_day:
+        hours = int(total_seconds // 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+
+    days_diff = (now.date() - reloaded.date()).days
+    if days_diff == 1:
+        return f"yesterday at {reloaded.strftime('%H:%M')}"
+
+    return f"on {reloaded.strftime('%Y-%m-%d')} at {reloaded.strftime('%H:%M')}"
+
+
+def show_status_footer(engine: BudgetEngine):
+    """Renders a footer line showing the data path and last config reload."""
+    theme = engine.config.get("theme", {})
+    main_color = theme.get("main_color", "cyan")
+
+    data_path = os.path.abspath(USER_DATA_BASE)
+    reload_display = format_reload_time(getattr(engine, "_config_mtime", None))
+
+    footer = Text(justify="center")
+    footer.append("Data: ", style="dim")
+    footer.append(data_path, style=main_color)
+    footer.append("   •   ", style="dim")
+    footer.append("Config reloaded ", style="dim")
+    footer.append(reload_display, style=main_color)
+
+    console.print()
+    console.print(footer)
+
 
 def show_main_dashboard(engine: BudgetEngine):
     """Displays the main dashboard with a summary and recent transactions."""
     check_config_and_notify(engine)
     summary = engine.get_dashboard_summary()
     theme = engine.config.get("theme", {})
-    
+
     # The top spending view should also be for the latest month
     latest_month = summary.get("latest_month", datetime.now().strftime('%B %Y'))
     month_str, year = latest_month.split()
     month = datetime.strptime(month_str, "%B").strftime("%m")
-    
+
     top_spending_view = engine.get_top_spending_for_month(year, month, limit=10)
-    
+
     console.clear()
-    
+
     # Header
-    console.print(Panel(f"[bold {theme['accent_color']}]Budget CLI[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']))
+    console.print(Align.center(render_banner_text(theme)))
     console.print()
-    console.print()
+
+    # --- Empty state: no transactions imported yet ---
+    if not engine.get_available_months():
+        welcome = (
+            "[bold green]Welcome to Budget CLI![/bold green]\n\n"
+            "Your budget file is set up and encrypted. There is no transaction "
+            "data yet, so there is nothing to summarize.\n\n"
+            "[bold]Get started in three steps:[/bold]\n"
+            "  1.  Open [cyan]config.toml[/cyan] and add your recurring income and expenses\n"
+            "      (e.g. salary, rent) under [cyan][[recurring_transactions]][/cyan].\n"
+            "  2.  Export a bank statement as CSV and drop it into the\n"
+            "      [cyan]statements[/cyan] folder.\n"
+            "  3.  Choose [bold]Import Statements[/bold] from the main menu.\n\n"
+            "[dim]Tip: the FAQ.md explains every setting in detail.[/dim]"
+        )
+        console.print(
+            Panel(
+                Text.from_markup(welcome),
+                title=f"[bold {theme['accent_color']}]Nothing here yet[/bold {theme['accent_color']}]",
+                border_style=theme['main_color'],
+                expand=False,
+                padding=(1, 2),
+            ),
+            justify="center",
+        )
+        show_status_footer(engine)
+        return
 
     # Summary table
     summary_table = Table(show_header=False, box=None, padding=(0, 2))
@@ -170,6 +473,7 @@ def show_main_dashboard(engine: BudgetEngine):
     console.print()
     console.print()
     console.print(top_spending_table)
+    show_status_footer(engine)
 def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict, round_amounts: bool, total_spent: Decimal = None):
     """Renders a progress bar for the monthly budget."""
     
@@ -213,9 +517,9 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
         usage_text = f" {usage_factor:.1f}x of budget used"
 
 
-    # Use the 'positive' color from theme, but default to a light green if not found
-    # The user likes the light green from the partial progress bar
-    bar_color = "#A1C398"
+    # The fill color reflects "money still available", so use the theme's
+    # 'positive' color (the same color used for income/positive amounts).
+    bar_color = theme.get('positive', "#A1C398")
     background_color = "grey37"
 
     progress_bar = ProgressBar(
@@ -228,12 +532,12 @@ def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, su
     )
 
     progress_table = Table.grid(expand=True)
-    progress_table.add_column()
+    progress_table.add_column(justify="left")
     progress_table.add_column(justify="right")
-    
+
     if usage_text:
         progress_table.add_row(progress_bar, Text(remaining_text, style=theme['main_color']))
-        progress_table.add_row("", Text(usage_text, style="dim"))
+        progress_table.add_row(Text(usage_text, style="dim"), "")
     else:
         progress_table.add_row(progress_bar, Text(remaining_text, style=theme['main_color']))
 
@@ -293,10 +597,9 @@ def show_history_view(engine: BudgetEngine):
         console.print()
         console.print()
         
-        terminal_menu = TerminalMenu(
+        terminal_menu = build_menu(
             month_menu_items,
             title="Select a month to view transactions:",
-            skip_empty_entries=True,
         )
         menu_index = terminal_menu.show()
         
@@ -524,7 +827,7 @@ def show_monthly_overview(engine: BudgetEngine):
     console.print()
 
     if not summaries:
-        console.print("[yellow]No transaction data found.[/yellow]")
+        console.print("[yellow]No transactions found.[/yellow]")
         Prompt.ask("\nPress Enter to return to the main menu.")
         return
 
@@ -567,18 +870,19 @@ def show_monthly_overview(engine: BudgetEngine):
         console.print(Panel(
             insights_grid,
             title=f"[bold {theme['accent_color']}]Insights[/bold {theme['accent_color']}]",
-            title_align="left",
+            title_align="center",
             border_style=theme['main_color'],
             expand=False,
-        ))
+        ), justify="center")
         console.print()
 
     has_total_money = any(s.get('total_money', {}).get('configured') for s in summaries)
 
     table = Table(expand=True, border_style=theme['main_color'], show_lines=True)
     table.add_column("Month", style=theme['accent_color'])
-    table.add_column("Monthly Budget", justify="right")
     table.add_column("Available to Spend", justify="right")
+    table.add_column("How much budget is left")
+    table.add_column("Sum of all transactions", justify="right")
     if has_total_money:
         configured_day = engine.get_total_money_as_of_day()
         if configured_day:
@@ -586,8 +890,6 @@ def show_monthly_overview(engine: BudgetEngine):
         else:
             money_header = "Total money I have"
         table.add_column(money_header, justify="right")
-    table.add_column("How much budget is left")
-    table.add_column("Sum of all transactions", justify="right")
 
     for s in summaries:
         is_current_month = (int(s['year']) == now.year and int(s['month']) == now.month)
@@ -596,7 +898,6 @@ def show_monthly_overview(engine: BudgetEngine):
         else:
             month_title = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%B %Y")
         
-        budget_text = format_amount(s['budget'], s['currency'], theme, round_amounts)
         spent_text = format_amount(s['total_spent'], s['currency'], theme, round_amounts)
         remaining_text = format_amount(s['available'], s['currency'], theme, round_amounts)
 
@@ -621,7 +922,7 @@ def show_monthly_overview(engine: BudgetEngine):
         # --- Text for the progress bar ---
         # "x% remaining" stays to the right of the bar; the "x% of budget used"
         # detail is moved onto its own line below so the two numbers don't crowd.
-        if remaining_percent > 100:
+        if remaining_percent >= 100:
             # Budget is still fully available (100% remaining). The surplus is
             # already reflected in the "Available to Spend" column, so there is
             # no need to repeat it here.
@@ -635,9 +936,9 @@ def show_monthly_overview(engine: BudgetEngine):
             remaining_text_line = f" 0% remaining"
             usage_line = f" {usage_factor:.1f}x of budget used"
 
-        # Use the 'positive' color from theme, but default to a light green if not found
-        # The user likes the light green from the partial progress bar
-        bar_color = "#A1C398"
+        # The fill color reflects "money still available", so use the theme's
+        # 'positive' color.
+        bar_color = theme.get('positive', "#A1C398")
         # Use a neutral background for the progress bar to avoid "two greens" or "red/green" confusion
         # when we want to show "how much is left"
         background_color = "grey37"
@@ -652,9 +953,11 @@ def show_monthly_overview(engine: BudgetEngine):
         )
         
         usage_grid = Table.grid(padding=(0, 1))
+        usage_grid.add_column(justify="left")
+        usage_grid.add_column(justify="right")
         if usage_line:
             usage_grid.add_row(progress_bar, Text(remaining_text_line, style=theme['main_color']))
-            usage_grid.add_row("", Text(usage_line, style="dim"))
+            usage_grid.add_row(Text(usage_line, style="dim"), "")
         else:
             usage_grid.add_row(progress_bar, Text(remaining_text_line, style=theme['main_color']))
 
@@ -662,9 +965,9 @@ def show_monthly_overview(engine: BudgetEngine):
             total_money_text = format_amount(
                 s['total_money']['total'], s['currency'], theme, round_amounts
             )
-            table.add_row(month_title, budget_text, remaining_text, total_money_text, usage_grid, spent_text)
+            table.add_row(month_title, remaining_text, usage_grid, spent_text, total_money_text)
         else:
-            table.add_row(month_title, budget_text, remaining_text, usage_grid, spent_text)
+            table.add_row(month_title, remaining_text, usage_grid, spent_text)
 
     console.print(table)
     Prompt.ask("\nPress Enter to return to the main menu.")
@@ -682,7 +985,7 @@ def show_delete_data_view(engine: BudgetEngine):
         "Delete all data (full reset)",
         "[ Back to Main Menu ]"
     ]
-    terminal_menu = TerminalMenu(
+    terminal_menu = build_menu(
         menu_items,
         title="Select an option:",
     )
@@ -699,7 +1002,7 @@ def show_delete_data_view(engine: BudgetEngine):
         month_map = {f"{year}-{month}": (year, month) for year, month in available_months}
         month_menu_items = sorted(month_map.keys(), reverse=True) + ["[ Cancel ]"]
         
-        month_menu = TerminalMenu(
+        month_menu = build_menu(
             month_menu_items,
             title="Select a month to delete:",
         )
@@ -783,8 +1086,15 @@ def main():
     """The main entry point of the application."""
     
     # Ensure data directories exist (for DB, config, and statements)
+    if sys.stdout.isatty():
+        sys.stdout.write("\033[2J\033[3J\033[H")
+        sys.stdout.flush()
+    else:
+        console.clear()
     if USER_DATA_BASE != "userdata":
-        console.print(f"[dim]Using custom data path: {USER_DATA_BASE}[/dim]")
+        debug_footer = f"Using custom data path: {USER_DATA_BASE}"
+    else:
+        debug_footer = ""
     
     os.makedirs(USER_DATA_BASE, exist_ok=True)
     os.makedirs(STATEMENTS_DIR, exist_ok=True)
@@ -810,11 +1120,10 @@ def main():
             theme = {"accent_color": "#00FFFF", "main_color": "#00FFFF"}
 
 
-        password = show_password_prompt(is_initial_setup, theme)
+        password = show_password_prompt(is_initial_setup, theme, footer=debug_footer)
         try:
-            with console.status("[bold green]Unlocking your budget...[/bold green]"):
-                engine = BudgetEngine(DB_PATH, password, config_path=CONFIG_PATH)
-            
+            engine = BudgetEngine(DB_PATH, password, config_path=CONFIG_PATH)
+
             # This is a bit of a hack, but we need to get the number of updated transactions
             # from the engine after the startup categorization.
             # We can't do this inside the engine itself, as it would require passing the console object.
@@ -848,12 +1157,11 @@ def main():
             "View History",
             "Monthly Overview",
             "Import Statements",
-            "Apply changes made in config.toml",
             "Change Master Password",
             "Delete Data",
             "Exit"
         ]
-        terminal_menu = TerminalMenu(
+        terminal_menu = build_menu(
             menu_items,
             title="\nWhat would you like to do?",
         )
@@ -866,21 +1174,16 @@ def main():
         elif menu_index == 2:
             run_importer(engine)
         elif menu_index == 3:
-            with console.status("[bold green]Reloading config and re-applying rules...[/bold green]"):
-                updated_count = engine.reload_config_and_reapply_all()
-            console.print(f"\n[bold green]Config reloaded! {updated_count} transactions were updated in the database.[/bold green]")
-            console.print("[dim]Note: Transaction statuses (Amount Mismatch/Verified) are also refreshed based on your new config.[/dim]")
-            Prompt.ask("\nPress Enter to return to the main menu.")
-        elif menu_index == 4:
             show_change_password_view(engine)
-        elif menu_index == 5:
+        elif menu_index == 4:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
                 clear_terminal_full()
                 break
-        elif menu_index == 6 or menu_index is None:
+        elif menu_index == 5:
             clear_terminal_full()
             break
+        # menu_index is None (ESC) -> do nothing, redraw the dashboard
 
     clear_terminal_full()
     console.print(f"[bold {engine.config['theme']['accent_color']}]Goodbye![/bold {engine.config['theme']['accent_color']}]")
