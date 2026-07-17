@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
 from rich.box import SQUARE, DOUBLE
+from rich.columns import Columns
 
 # --- Dependency-safe imports ---
 # If a required third-party package is missing, show a friendly panel
@@ -263,26 +264,157 @@ def format_amount(amount: Decimal, currency: str, theme: dict, round_amounts: bo
         return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
-def add_total_money_rows(summary_table, summary: dict, theme: dict, round_amounts: bool):
-    """Adds the 'Total money I have' line (plus a breakdown) to a summary table."""
+def build_total_money_panel(summary: dict, theme: dict, round_amounts: bool) -> Optional[Panel]:
+    """Builds the right-hand 'Total money I have' panel (accounts + cash breakdown).
+
+    Returns None when total money is not configured, so callers can skip it.
+    """
     total_money = summary.get('total_money')
     if not total_money or not total_money.get('configured'):
-        return
+        return None
 
     currency = summary['currency']
 
-    summary_table.add_row(
-        "Total money I have:",
+    money_table = Table(show_header=False, box=None, padding=(0, 1), width=34)
+    money_table.add_column(style=theme['main_color'], width=20)
+    money_table.add_column(style=f"bold {theme['positive']}", justify="right", width=12)
+
+    # Breakdown: Accounts (per account) then Cash.
+    money_table.add_row("   Accounts", "")
+    for acc in total_money['accounts']:
+        money_table.add_row(
+            f"     {acc['name']}",
+            format_amount(Decimal(str(acc['balance'])), currency, theme, round_amounts)
+        )
+    money_table.add_row(
+        "   Cash",
+        format_amount(Decimal(str(total_money['cash'])), currency, theme, round_amounts)
+    )
+
+    # Total sits below the breakdown, separated by a full-width rule.
+    total_table = Table(show_header=False, box=None, padding=(0, 1), width=34)
+    total_table.add_column(style=f"bold {theme['accent_color']}", width=20)
+    total_table.add_column(style=f"bold {theme['positive']}", justify="right", width=12)
+    total_table.add_row(
+        Text("Total money I have:", style=f"bold {theme['accent_color']}"),
         format_amount(total_money['total'], currency, theme, round_amounts)
     )
 
-    # Breakdown: account balances + cash
-    parts = []
-    for acc in total_money['accounts']:
-        parts.append(f"{acc['name']}: {acc['balance']:.2f} {currency}")
-    parts.append(f"Cash: {total_money['cash']:.2f} {currency}")
-    breakdown = Text("   +   ".join(parts), style="dim")
-    summary_table.add_row("", breakdown)
+    content = Group(money_table, Rule(style="dim"), total_table)
+
+    return Panel(
+        content,
+        title=f"[bold {theme['accent_color']}]Total money I have[/bold {theme['accent_color']}]",
+        expand=False,
+        border_style=theme['main_color'],
+        width=38
+    )
+
+
+def build_progress_table(engine: BudgetEngine, summary: dict, theme: dict, round_amounts: bool) -> Table:
+    """Builds the 'How much budget is left' progress bar as a borderless table
+    (no nested Panel, so it sits cleanly inside the budget panel)."""
+    allowed_spend = summary['allowed_monthly_spend']
+    available_to_spend = summary['available_to_spend']
+    surplus = summary['surplus']
+    currency = summary['currency']
+    total_spent = summary.get('total_transactions_sum', Decimal('0'))
+
+    if allowed_spend <= 0:
+        remaining_percent = Decimal('0') if available_to_spend >= 0 else Decimal('-100')
+        spent_percent = Decimal('100') if available_to_spend < 0 else Decimal('0')
+        usage_factor = float(abs(total_spent) / 1) if total_spent is not None and total_spent < 0 else 0.0
+    else:
+        remaining_percent = (available_to_spend / allowed_spend) * 100
+        spent_percent = 100 - remaining_percent
+        net_spent = allowed_spend - available_to_spend
+        usage_factor = float(net_spent / allowed_spend)
+
+    progress_display = max(0, min(remaining_percent, 100))
+    remaining_percent_display = max(0, remaining_percent)
+
+    if remaining_percent >= 100:
+        remaining_text = f" {remaining_percent_display:.0f}% remaining"
+    elif remaining_percent >= 0:
+        remaining_text = f" {remaining_percent_display:.0f}% remaining"
+    else:
+        remaining_text = f" 0% remaining"
+
+    bar_color = theme.get('positive', "#A1C398")
+    background_color = "grey37"
+
+    progress_bar = ProgressBar(
+        total=100,
+        completed=progress_display,
+        style=background_color,
+        complete_style=bar_color,
+        finished_style=bar_color,
+        width=18,
+    )
+
+    # Bar + percentage on the SAME line, percentage right-aligned.
+    bar_row = Table.grid(expand=False, padding=(0, 0))
+    bar_row.add_column(justify="left", width=20)
+    bar_row.add_column(justify="right", width=20)
+    bar_row.add_row(progress_bar, Text(remaining_text.strip(), style=theme['main_color']))
+
+    progress_block = bar_row
+
+    return progress_block
+
+
+def build_budget_panel(engine: BudgetEngine, summary: dict, theme: dict, round_amounts: bool) -> Panel:
+    """Builds the left-hand 'Budget' panel grouping budget inputs, available
+    to spend (headline) and the budget progress bar."""
+    currency = summary['currency']
+    accent = theme['accent_color']
+    dim = "dim"
+
+    # Inputs table (budget + everyday spending)
+    inputs_table = Table(show_header=False, box=None, padding=(0, 1), width=42)
+    inputs_table.add_column(style=theme['main_color'], width=26)
+    inputs_table.add_column(style=f"bold {theme['positive']}", justify="right", width=14)
+    inputs_table.add_row("This month's Budget:", format_amount(summary['allowed_monthly_spend'], currency, theme, round_amounts))
+    inputs_table.add_row("Everyday spending:", format_amount(summary['monthly_expenses'], currency, theme, round_amounts))
+
+    # Headline row (own table so the amount right-aligns against the divider)
+    headline_table = Table(show_header=False, box=None, padding=(0, 1), width=42)
+    headline_table.add_column(style=theme['main_color'], width=26)
+    headline_table.add_column(style=f"bold {accent}", justify="right", width=14)
+    headline_table.add_row(
+        Text("Available to Spend:", style=f"bold {accent}"),
+        format_amount(summary['available_to_spend'], currency, theme, round_amounts)
+    )
+
+    # Full-width divider Rules separate the groups and stretch under the numbers.
+    content = Group(
+        inputs_table,
+        Rule(style=dim),
+        headline_table,
+        Rule(style=dim),
+        build_progress_table(engine, summary, theme, round_amounts),
+    )
+
+    return Panel(
+        content,
+        title=f"[bold {accent}]Budget[/bold {accent}]",
+        expand=False,
+        border_style=theme['main_color'],
+        width=46
+    )
+
+
+def build_summary_columns(engine: BudgetEngine, summary: dict, theme: dict, round_amounts: bool) -> Columns:
+    """Builds the side-by-side summary: a budget panel (left) and a total-money
+    panel (right, when configured). Falls back to stacked layout on narrow terminals."""
+    left = build_budget_panel(engine, summary, theme, round_amounts)
+    right = build_total_money_panel(summary, theme, round_amounts)
+
+    boxes = [left]
+    if right is not None:
+        boxes.append(right)
+
+    return Columns(boxes, expand=False, equal=False)
 
 def check_config_and_notify(engine: BudgetEngine) -> dict:
     """Checks if config changed and prints notification. Returns reload info or None."""
@@ -420,28 +552,11 @@ def show_main_dashboard(engine: BudgetEngine):
         show_status_footer(engine)
         return
 
-    # Summary table
-    summary_table = Table(show_header=False, box=None, padding=(0, 2))
-    summary_table.add_column(style=theme['main_color'])
-    summary_table.add_column(style=f"bold {theme['positive']}", justify="right")
-    
-    summary_table.add_row("Available to Spend:", format_amount(summary['available_to_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-    summary_table.add_row("Current months Budget:", format_amount(summary['allowed_monthly_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-    summary_table.add_row("Everyday spending (groceries, shopping…):", format_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-    add_total_money_rows(summary_table, summary, theme, engine.config.get('user', {}).get('round_amounts', False))
-    
-    console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {latest_month}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
-    
-    # Show the progress bar
-    show_budget_progress(
-        summary['allowed_monthly_spend'],
-        summary['available_to_spend'],
-        summary['surplus'],
-        summary['currency'],
-        theme,
-        engine.config.get('user', {}).get('round_amounts', False),
-        summary.get('total_transactions_sum', Decimal('0'))
-    )
+    # Summary: side-by-side budget panel (left) and total-money panel (right)
+    round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+    console.print(Align.center(Text.from_markup(f"[bold {theme['accent_color']}][b]Summary for {latest_month}[/b][/bold {theme['accent_color']}]", justify="center")))
+    console.print()
+    console.print(Align.center(build_summary_columns(engine, summary, theme, round_amounts)))
 
     # --- Alerts Panel ---
     if summary.get('alerts'):
@@ -474,82 +589,6 @@ def show_main_dashboard(engine: BudgetEngine):
     console.print()
     console.print(top_spending_table)
     show_status_footer(engine)
-def show_budget_progress(allowed_spend: Decimal, available_to_spend: Decimal, surplus: Decimal, currency: str, theme: dict, round_amounts: bool, total_spent: Decimal = None):
-    """Renders a progress bar for the monthly budget."""
-    
-    if allowed_spend <= 0:
-        remaining_percent = Decimal('0') if available_to_spend >= 0 else Decimal('-100')
-        spent_percent = Decimal('100') if available_to_spend < 0 else Decimal('0')
-        usage_factor = float(abs(total_spent) / 1) if total_spent is not None and total_spent < 0 else 0.0
-    else:
-        remaining_percent = (available_to_spend / allowed_spend) * 100
-        spent_percent = 100 - remaining_percent
-        
-        # The user wants to see how much of their budget they have spent.
-        # 'available_to_spend' is (Budget + Net Expenses).
-        # So (Budget - available_to_spend) is the Net Amount Spent.
-        net_spent = allowed_spend - available_to_spend
-        usage_factor = float(net_spent / allowed_spend)
-
-    # For the progress bar, clamp the value between 0 and 100
-    # We use remaining_percent for the bar itself to show "how much is left"
-    progress_display = max(0, min(remaining_percent, 100))
-
-    # Text display can show the actual percentage
-    remaining_percent_display = max(0, remaining_percent)
-
-    
-    # --- Text for the progress bar ---
-    # "x% remaining" stays to the right of the bar; the "x% of budget used"
-    # detail is moved onto its own line below so the two numbers don't crowd.
-    if remaining_percent >= 100:
-        # Budget is still fully available (100%+ remaining). The surplus is
-        # already reflected in the "Available to Spend" column, so there is
-        # no need to repeat it here.
-        remaining_text = f" {remaining_percent_display:.0f}% remaining"
-        usage_text = ""
-    elif remaining_percent >= 0:
-        remaining_text = f" {remaining_percent_display:.0f}% remaining"
-        usage_text = f" {spent_percent:.1f}% of budget used"
-    else:
-        # Over budget
-        remaining_text = f" 0% remaining"
-        usage_text = f" {usage_factor:.1f}x of budget used"
-
-
-    # The fill color reflects "money still available", so use the theme's
-    # 'positive' color (the same color used for income/positive amounts).
-    bar_color = theme.get('positive', "#A1C398")
-    background_color = "grey37"
-
-    progress_bar = ProgressBar(
-        total=100,
-        completed=progress_display,
-        style=background_color,
-        complete_style=bar_color,
-        finished_style=bar_color,
-        width=50,
-    )
-
-    progress_table = Table.grid(expand=True)
-    progress_table.add_column(justify="left")
-    progress_table.add_column(justify="right")
-
-    if usage_text:
-        progress_table.add_row(progress_bar, Text(remaining_text, style=theme['main_color']))
-        progress_table.add_row(Text(usage_text, style="dim"), "")
-    else:
-        progress_table.add_row(progress_bar, Text(remaining_text, style=theme['main_color']))
-
-    console.print(
-        Panel(
-            progress_table,
-            title=f"[bold {theme['accent_color']}]How much budget is left[/bold {theme['accent_color']}]",
-            expand=False,
-            border_style=theme['main_color']
-        ),
-        justify="center"
-    )
 
 
 def show_history_view(engine: BudgetEngine):
@@ -636,30 +675,11 @@ def show_history_view(engine: BudgetEngine):
         
         month_title = datetime.strptime(f"{year}-{month}-01", "%Y-%m-%d").strftime("%B %Y")
 
-        # --- Summary View ---
-        summary_table = Table(show_header=False, box=None, padding=(0, 2))
-        summary_table.add_column(style=theme['main_color'])
-        summary_table.add_column(style=f"bold {theme['positive']}", justify="right")
-        
-        summary_table.add_row("Available to Spend:", format_amount(summary['available_to_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-        summary_table.add_row("Current months Budget:", format_amount(summary['allowed_monthly_spend'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-        summary_table.add_row("Everyday spending (groceries, shopping…):", format_amount(summary['monthly_expenses'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-        if 'total_transactions_sum' in summary:
-            summary_table.add_row("Sum of all transactions in month:", format_amount(summary['total_transactions_sum'], summary['currency'], theme, engine.config.get('user', {}).get('round_amounts', False)))
-        add_total_money_rows(summary_table, summary, theme, engine.config.get('user', {}).get('round_amounts', False))
-
-        console.print(Panel(summary_table, title=f"[bold {theme['accent_color']}]Summary for {month_title}[/bold {theme['accent_color']}]", expand=False, border_style=theme['main_color']), justify="center")
-
-        # --- Progress Bar ---
-        show_budget_progress(
-            summary['allowed_monthly_spend'],
-            summary['available_to_spend'],
-            summary['surplus'],
-            summary['currency'],
-            theme,
-            engine.config.get('user', {}).get('round_amounts', False),
-            summary.get('total_transactions_sum', Decimal('0'))
-        )
+        # --- Summary View (side-by-side budget + total money) ---
+        round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+        console.print(Align.center(Text.from_markup(f"[bold {theme['accent_color']}][b]Summary for {month_title}[/b][/bold {theme['accent_color']}]", justify="center")))
+        console.print()
+        console.print(Align.center(build_summary_columns(engine, summary, theme, round_amounts)))
 
         # --- Alerts Panel ---
         if summary.get('alerts'):
