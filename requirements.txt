@@ -1,4 +1,5 @@
 rich
+pyfiglet
 simple-term-menu
 pycryptodome
 toml

@@ -28,6 +28,11 @@ try:
     from app.core import BudgetEngine
     from app.importer import discover_csv_files, import_transactions
     from app.banner import render_banner
+
+    try:
+        import pyfiglet
+    except ImportError:
+        pyfiglet = None
 except ImportError as e:
     _console = Console()
     _missing = getattr(e, "name", None) or str(e).split()[-1] or "a required package"
@@ -264,6 +269,26 @@ def format_amount(amount: Decimal, currency: str, theme: dict, round_amounts: bo
         return Text(f"{amount:.0f} {currency}", style=style, justify="right")
     return Text(f"{amount:.2f} {currency}", style=style, justify="right")
 
+def render_dashboard_title(console: Console, text: str, theme: dict) -> None:
+    """Prints the dashboard title as a large visual heading.
+
+    Uses pyfiglet (when available) to render the month as big ASCII text so it
+    reads as the dashboard's main heading. Falls back to a bold centered line
+    if pyfiglet is not installed.
+    """
+    accent = theme.get('accent_color', 'cyan')
+    if pyfiglet is not None:
+        # Render the month (e.g. "July 2026") as larger ASCII art.
+        figlet = pyfiglet.Figlet(font='small', width=console.width or 80)
+        art = figlet.renderText(text)
+        # Large month text serves as the dashboard heading.
+        console.print(Align.center(Text(art.rstrip('\n'), style=accent)))
+    else:
+        console.print(Align.center(Text.from_markup(
+            f"[bold {accent}][b]Summary for {text}[/b][/bold {accent}]", justify="center"
+        )))
+
+
 def build_total_money_panel(summary: dict, theme: dict, round_amounts: bool) -> Optional[Panel]:
     """Builds the right-hand 'Total money I have' panel (accounts + cash breakdown).
 
@@ -279,24 +304,25 @@ def build_total_money_panel(summary: dict, theme: dict, round_amounts: bool) -> 
     money_table.add_column(style=theme['main_color'], width=20)
     money_table.add_column(style=f"bold {theme['positive']}", justify="right", width=12)
 
-    # Breakdown: Accounts (per account) then Cash.
-    money_table.add_row("   Accounts", "")
+    # Section: Accounts (label, then each account indented beneath it)
+    money_table.add_row(Text("Accounts", style=f"bold {theme['main_color']}"), "")
     for acc in total_money['accounts']:
         money_table.add_row(
-            f"     {acc['name']}",
+            f"  {acc['name']}",
             format_amount(Decimal(str(acc['balance'])), currency, theme, round_amounts)
         )
     money_table.add_row(
-        "   Cash",
+        "  Cash",
         format_amount(Decimal(str(total_money['cash'])), currency, theme, round_amounts)
     )
 
-    # Total sits below the breakdown, separated by a full-width rule.
+    # Total sits below the breakdown, separated by a full-width rule and
+    # styled slightly stronger so it stands out from the account rows.
     total_table = Table(show_header=False, box=None, padding=(0, 1), width=34)
     total_table.add_column(style=f"bold {theme['accent_color']}", width=20)
     total_table.add_column(style=f"bold {theme['positive']}", justify="right", width=12)
     total_table.add_row(
-        Text("Total money I have:", style=f"bold {theme['accent_color']}"),
+        Text("TOTAL:", style=f"bold {theme['accent_color']}"),
         format_amount(total_money['total'], currency, theme, round_amounts)
     )
 
@@ -387,11 +413,12 @@ def build_budget_panel(engine: BudgetEngine, summary: dict, theme: dict, round_a
     )
 
     # Full-width divider Rules separate the groups and stretch under the numbers.
+    # The divider below "Available to Spend" is intentionally omitted so the
+    # progress bar reads as belonging directly to that headline.
     content = Group(
         inputs_table,
         Rule(style=dim),
         headline_table,
-        Rule(style=dim),
         build_progress_table(engine, summary, theme, round_amounts),
     )
 
@@ -554,7 +581,7 @@ def show_main_dashboard(engine: BudgetEngine):
 
     # Summary: side-by-side budget panel (left) and total-money panel (right)
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)
-    console.print(Align.center(Text.from_markup(f"[bold {theme['accent_color']}][b]Summary for {latest_month}[/b][/bold {theme['accent_color']}]", justify="center")))
+    render_dashboard_title(console, latest_month, theme)
     console.print()
     console.print(Align.center(build_summary_columns(engine, summary, theme, round_amounts)))
 
@@ -677,7 +704,7 @@ def show_history_view(engine: BudgetEngine):
 
         # --- Summary View (side-by-side budget + total money) ---
         round_amounts = engine.config.get('user', {}).get('round_amounts', False)
-        console.print(Align.center(Text.from_markup(f"[bold {theme['accent_color']}][b]Summary for {month_title}[/b][/bold {theme['accent_color']}]", justify="center")))
+        render_dashboard_title(console, month_title, theme)
         console.print()
         console.print(Align.center(build_summary_columns(engine, summary, theme, round_amounts)))
 
