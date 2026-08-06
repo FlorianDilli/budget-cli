@@ -74,9 +74,16 @@ class BudgetEngine:
                 default_config = {
                     "user": {"currency_symbol": "USD", "round_amounts": False},
                     "theme": {
-                        "accent_color": "#00FFFF", "positive": "#00FF00",
-                        "negative": "#FF0000", "main_color": "#00FFFF",
-                        "recurring_transaction_highlight": "#E2B59A"
+                        "text":       "#FBF6E2",
+                        "text_muted": "#9A9382",
+                        "border":     "#4F4A3E",
+                        "heading":    "#FFCF71",
+                        "income":     "bold #A1C398",
+                        "expense":    "bold #FA7070",
+                        "recurring":  "#E2B59A",
+                        "warning":    "#E89B3C",
+                        "danger":     "#FA7070",
+                        "info":       "#8FB8C9",
                     },
                     "importer": {
                         "formats": [
@@ -108,10 +115,16 @@ class BudgetEngine:
         # Ensure theme settings exist, providing defaults if they don't
         if "theme" not in config:
             config["theme"] = {
-                "accent_color": "#00FFFF",
-                "positive": "#00FF00",
-                "negative": "#FF0000",
-                "main_color": "#00FFFF"
+                "text":       "#FBF6E2",
+                "text_muted": "#9A9382",
+                "border":     "#4F4A3E",
+                "heading":    "#FFCF71",
+                "income":     "bold #A1C398",
+                "expense":    "bold #FA7070",
+                "recurring":  "#E2B59A",
+                "warning":    "#E89B3C",
+                "danger":     "#FA7070",
+                "info":       "#8FB8C9",
             }
 
         # Backward compatibility and migration for importer config

@@ -89,11 +89,29 @@ decimal_separator  = ","
 # │ Use hex codes for colors (e.g., "#FF5733").                               │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [theme]
-accent_color                    = "#FFCF71"  # Color for titles and highlights
-main_color                      = "#FBF6E2"  # General text color
-positive                        = "#A1C398"  # Color for positive amounts (income)
-negative                        = "#FA7070"  # Color for negative amounts (expenses)
-recurring_transaction_highlight = "#E2B59A"  # Color for recurring transactions in lists
+# ── Structure (recedes from content) ──────────────────────────────────────────
+text          = "#FBF6E2"  # body copy and general UI text
+text_muted    = "#9A9382"  # secondary text — dates, hints, metadata
+border        = "#4F4A3E"  # panel borders and rule lines
+heading       = "bold #FFCF71"  # section titles — the single "look here" color
+
+# ── Money ─────────────────────────────────────────────────────────────────────
+income        = "#A1C398"  # money in (also used for success/verified states)
+expense       = "#FA7070"  # money out
+recurring     = "#E2B59A"  # predictable / committed transactions (prefixed ↻)
+
+# ── Signals (rare, high-salience — what red/yellow/green now mean) ─────────────
+#   Use a compound style like "bold #FA7070 on #2E0808" for maximum urgency.
+warning       = "bold #E89B3C"  # approaching a limit, wrong month, duplicates skipped
+danger        = "#FA7070"  # over budget, mismatch, destructive actions, load errors
+info          = "#8FB8C9"  # file paths, config references, detected formats
+
+# ── Legacy keys (still accepted as aliases, can be removed) ───────────────────
+# accent_color                    = "#FFCF71"  # → heading
+# main_color                      = "#FBF6E2"  # → text
+# positive                        = "#A1C398"  # → income
+# negative                        = "#FA7070"  # → expense
+# recurring_transaction_highlight = "#E2B59A"  # → recurring
 
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
