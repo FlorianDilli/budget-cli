@@ -73,11 +73,16 @@ The first time you run the application, you will be prompted to create a passwor
 
 You will need this password every time you open the application.
 
-### 📝 2. Set Up `config.toml`
-The `config.toml` file is where you configure the application to suit your needs. When you first run the app, a `config.toml` and `budget.db` file will be created for you. These are stored in the `userdata` directory inside the main application folder. You can edit the `config.toml` to:
-- Set your currency symbol.
-- Define rules to automatically categorize your transactions.
-- List your recurring income and expenses (like salary or rent).
+### 📝 2. Set Up your config files
+Your configuration is split into two files, both created for you on first run and stored in the `userdata` directory inside the main application folder (alongside `budget.db`):
+
+- **`config.toml`** — the stable, app-wide settings: your currency symbol, the CSV column mappings for each bank (`[[importer.formats]]`), and the color theme.
+- **`finance.toml`** — the data that grows over time: your category rules (`[category_rules]`), recurring income and expenses (`[[recurring_transactions]]`), and cash-on-hand snapshots (`[cash]`).
+
+Keeping these separate means `config.toml` stays short and easy to scan, while your ever-growing list of recurring transactions lives in its own file. You can edit either file to:
+- Set your currency symbol (in `config.toml`).
+- Define rules to automatically categorize your transactions (in `finance.toml`).
+- List your recurring income and expenses (like salary or rent) in `finance.toml`.
 
 ### ℹ️ 3. Further Information
 For more detailed information on how the budget is calculated and how to use the application, please refer to the [Frequently Asked Questions](FAQ.md) file.
@@ -93,8 +98,8 @@ This menu allows you to look at your financial data from previous months. You ca
 ### 🏦 Import Statements
 Here, you can import your bank statements. The application looks for `.csv` files in the `userdata/statements` directory. Once you place your CSV files there, this option will import them, categorize the transactions based on your rules, and add them to your budget.
 
-### ⚙️ Apply changes made in config.toml
-If you make changes to your `config.toml` file while the application is running, use this option to apply them. The application will reload your configuration and re-categorize all your transactions based on any new rules you've added.
+### ⚙️ Apply changes made in your config files
+If you make changes to `config.toml` or `finance.toml` while the application is running, use this option to apply them. The application detects changes to either file, reloads your configuration, and re-categorizes all your transactions based on any new rules you've added.
 
 ### 🗑️ Delete Data
 This menu gives you options to manage your data:

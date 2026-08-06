@@ -2,7 +2,7 @@
 
 ### How is the budget calculated?
 
-Your monthly budget is calculated based on your recurring income and expenses, which you define in the `config.toml` file. The application takes all transactions you've marked as "recurring" and normalizes them into a monthly amount.
+Your monthly budget is calculated based on your recurring income and expenses, which you define in the `finance.toml` file. The application takes all transactions you've marked as "recurring" and normalizes them into a monthly amount.
 
 For example, if you have a recurring yearly subscription of $120, the application will treat it as a $10 monthly expense. If you receive a salary twice a month, you would add it as a recurring transaction with a positive amount.
 
@@ -10,7 +10,7 @@ The final "monthly budget" is the sum of all these normalized recurring transact
 
 ### Why does my budget in the history view change when I update my recurring transactions?
 
-The application calculates the budget for any given month—past or present—by looking at your `config.toml` and determining which recurring transactions were active on the **first day** of that specific month. It does not store a historical record of the budget itself.
+The application calculates the budget for any given month—past or present—by looking at your `finance.toml` and determining which recurring transactions were active on the **first day** of that specific month. It does not store a historical record of the budget itself.
 
 If a recurring transaction's amount changed over time (for example, your rent increased or a subscription's price went up), you can record the change directly on the same entry using `amount_history` instead of duplicating the entry. This keeps a single entry while still producing accurate historical budgets and avoiding false "amount mismatch" alerts. For example:
 
@@ -40,7 +40,7 @@ For example, if your monthly budget is $1000 and you spend $50 on groceries and 
 
 `Available to Spend = Monthly Budget - Sum of Non-Recurring Transactions`
 
-Any recurring transactions that have a different amount than what is defined in your `config.toml` will also be factored in. For instance, if your electricity bill is usually $50 but was $60 this month, the $10 difference will be subtracted from your available balance.
+Any recurring transactions that have a different amount than what is defined in your `finance.toml` will also be factored in. For instance, if your electricity bill is usually $50 but was $60 this month, the $10 difference will be subtracted from your available balance.
 
 ### How are annual or non-monthly payments handled?
 
@@ -73,7 +73,7 @@ The app assigns every imported transaction to the account it came from (using th
 
 ### How do I track cash?
 
-Cash has no transaction history, so you just write down how much cash you have whenever you think about it. Add a `[cash]` section to `config.toml` with a list of `date`/`amount` entries:
+Cash has no transaction history, so you just write down how much cash you have whenever you think about it. Add a `[cash]` section to `finance.toml` with a list of `date`/`amount` entries:
 
 ```toml
 [cash]
@@ -88,16 +88,16 @@ For any given date, the app uses the most recent cash entry on or before that da
 ### What are "Budget Alerts"?
 
 Budget Alerts appear when the app detects an anomaly in your recurring transactions:
-*   **Amount Mismatch**: You paid more or less than what you defined in `config.toml`.
+*   **Amount Mismatch**: You paid more or less than what you defined in `finance.toml`.
 *   **Wrong Month**: You made a payment in a month where it wasn't expected (requires `payment_month` to be set).
 *   **Missing Payment**: An expected payment (defined via `payment_month`) was not found in your transactions.
 
-You can configure when these payments are expected by adding `payment_month` (e.g., `1` for January or `[1, 7]` for bi-annual) to your recurring transactions in `config.toml`.
+You can configure when these payments are expected by adding `payment_month` (e.g., `1` for January or `[1, 7]` for bi-annual) to your recurring transactions in `finance.toml`.
 
 ### Is my data secure?
 
 All the transactions you import via CSV files are encrypted and stored locally on your computer in a file called `budget.db`. The application uses strong encryption (AES-GCM) and requires your password to decrypt the data every time you open it. Your password is not stored anywhere in the application; it is used to generate an encryption key in memory. This means that without your password, your financial data is unreadable.
-The `config.toml` is NOT encrypted. Any data you store there is stored in plain text. Keep that in mind.
+Both `config.toml` and `finance.toml` are NOT encrypted. Any data you store in them is stored in plain text — and `finance.toml` in particular holds your real financial data (income, expenses, cash). Keep that in mind and store these files in a secure location.
 
 ### How can I delete my data?
 

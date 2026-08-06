@@ -30,11 +30,17 @@ class BudgetEngine:
             self.config_path = os.path.join(user_data_base, "config.toml")
         else:
             self.config_path = config_path
-        
+
+        # finance.toml holds the data that grows over time (category rules,
+        # recurring transactions, cash) and lives next to config.toml.
+        config_dir = os.path.dirname(self.config_path)
+        self.finance_path = os.path.join(config_dir, "finance.toml")
+
         self.db = DatabaseManager(self.db_path)
         self._encryption_key = None
         self.config = self._load_config()
         self._config_mtime = os.path.getmtime(self.config_path)
+        self._finance_mtime = os.path.getmtime(self.finance_path)
 
         self._get_recurring_transactions() # Validate recurring transactions on init
         self._get_account_snapshots()       # Validate account balance snapshots on init
@@ -53,62 +59,41 @@ class BudgetEngine:
             A dict with 'count' (updated transactions) if reloaded, None otherwise.
         """
         try:
-            current_mtime = os.path.getmtime(self.config_path)
+            current_config_mtime = os.path.getmtime(self.config_path)
+            current_finance_mtime = os.path.getmtime(self.finance_path)
         except OSError:
             return None
         
-        if current_mtime != self._config_mtime:
-            self._config_mtime = current_mtime
+        if current_config_mtime != self._config_mtime or current_finance_mtime != self._finance_mtime:
+            self._config_mtime = current_config_mtime
+            self._finance_mtime = current_finance_mtime
             updated_count = self.reload_config_and_reapply_all()
             return {"count": updated_count}
         return None
 
     def _load_config(self) -> Dict[str, Any]:
-        """Loads the user's configuration from a TOML file."""
-        if not os.path.exists(self.config_path):
-            # If config.toml doesn't exist, copy it from the example file.
-            example_path = "config.example.toml"
-            if not os.path.exists(example_path):
-                # This is a fallback in case the example file is missing.
-                # Creates a minimal, functional config.
-                default_config = {
-                    "user": {"currency_symbol": "USD", "round_amounts": False},
-                    "theme": {
-                        "text":       "#FBF6E2",
-                        "text_muted": "#9A9382",
-                        "border":     "#4F4A3E",
-                        "heading":    "#FFCF71",
-                        "income":     "bold #A1C398",
-                        "expense":    "bold #FA7070",
-                        "recurring":  "#E2B59A",
-                        "warning":    "#E89B3C",
-                        "danger":     "#FA7070",
-                        "info":       "#8FB8C9",
-                    },
-                    "importer": {
-                        "formats": [
-                            {
-                                "name": "Default",
-                                "date_column": "Date",
-                                "description_column": "Description",
-                                "amount_column": "Amount"
-                            }
-                        ]
-                    },
-                    "category_rules": {},
-                    "recurring_transactions": []
-                }
-                with open(self.config_path, "w") as f:
-                    toml.dump(default_config, f)
-            else:
-                shutil.copy(example_path, self.config_path)
-        
+        """Loads the user's configuration.
+
+        Stable, app-wide settings (user, theme, importer) come from
+        config.toml, while the data that grows over time (category_rules,
+        recurring_transactions, cash) comes from finance.toml. The two are
+        merged into a single dict so the rest of the engine is unchanged.
+        """
+        self._ensure_config_files_exist()
+
         try:
             with open(self.config_path, "r") as f:
                 config = toml.load(f)
+            with open(self.finance_path, "r") as f:
+                finance = toml.load(f)
         except Exception as e:
-            # If we are in __init__, we might want to raise this to prevent partial initialization
-            raise RuntimeError(f"Failed to load configuration from '{self.config_path}': {e}") from e
+            raise RuntimeError(
+                f"Failed to load configuration from '{self.config_path}' or '{self.finance_path}': {e}"
+            ) from e
+
+        # Merge the growing data file into the main settings config. The two
+        # files are designed to be disjoint, so this won't clobber settings.
+        config.update(finance)
 
         if "user" not in config:
             config["user"] = {"currency_symbol": "USD", "round_amounts": False}
@@ -168,6 +153,60 @@ class BudgetEngine:
             }
 
         return config
+
+    def _ensure_config_files_exist(self) -> None:
+        """Creates config.toml and finance.toml from their examples if missing."""
+        if not os.path.exists(self.config_path):
+            example_path = "config.example.toml"
+            if not os.path.exists(example_path):
+                # Fallback in case the example file is missing.
+                with open(self.config_path, "w") as f:
+                    toml.dump(self._default_config(), f)
+            else:
+                shutil.copy(example_path, self.config_path)
+
+        if not os.path.exists(self.finance_path):
+            finance_example = "finance.example.toml"
+            if not os.path.exists(finance_example):
+                with open(self.finance_path, "w") as f:
+                    toml.dump(self._default_finance(), f)
+            else:
+                shutil.copy(finance_example, self.finance_path)
+
+    def _default_config(self) -> Dict[str, Any]:
+        """Minimal fallback settings config, used only if the example is missing."""
+        return {
+            "user": {"currency_symbol": "USD", "round_amounts": False},
+            "theme": {
+                "text":       "#FBF6E2",
+                "text_muted": "#9A9382",
+                "border":     "#4F4A3E",
+                "heading":    "#FFCF71",
+                "income":     "bold #A1C398",
+                "expense":    "bold #FA7070",
+                "recurring":  "#E2B59A",
+                "warning":    "#E89B3C",
+                "danger":     "#FA7070",
+                "info":       "#8FB8C9",
+            },
+            "importer": {
+                "formats": [
+                    {
+                        "name": "Default",
+                        "date_column": "Date",
+                        "description_column": "Description",
+                        "amount_column": "Amount"
+                    }
+                ]
+            },
+        }
+
+    def _default_finance(self) -> Dict[str, Any]:
+        """Minimal fallback finance config, used only if the example is missing."""
+        return {
+            "category_rules": {},
+            "recurring_transactions": [],
+        }
 
     def _connect_to_db(self) -> None:
         """Derives the DB key and connects to the database."""
@@ -1244,9 +1283,11 @@ class BudgetEngine:
             self.db.close() # Ensure the connection is closed before deleting
             os.remove(self.db_path)
             
-        # Also delete the config file so it gets recreated from the template on next run
+        # Also delete the config files so they get recreated from the templates on next run
         if os.path.exists(self.config_path):
             os.remove(self.config_path)
+        if os.path.exists(self.finance_path):
+            os.remove(self.finance_path)
 
     def _reset_state_and_reconnect(self) -> None:
         from datetime import datetime

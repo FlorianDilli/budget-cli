@@ -419,7 +419,7 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
             console.print(
                 Panel(
                     Text.from_markup(
-                        f"[income]✔ Your changes to [info]config.toml[/info] were applied automatically.[/income]\n"
+                        f"[income]✔ Your changes to [info]config.toml[/info] / [info]finance.toml[/info] were applied automatically.[/income]\n"
                         f"[text_muted]{count} transaction{'s' if count != 1 else ''} "
                         f"{'were' if count != 1 else 'was'} re-categorized and re-checked.[/text_muted]"
                     ),
@@ -432,7 +432,7 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
             console.print(
                 Panel(
                     Text.from_markup(
-                        "[income]✔ Your [info]config.toml[/info] changes were picked up.[/income]\n"
+                        "[income]✔ Your [info]config.toml[/info] / [info]finance.toml[/info] changes were picked up.[/income]\n"
                         "[text_muted]No transactions needed updating this time.[/text_muted]"
                     ),
                     border_style="income",
@@ -512,7 +512,7 @@ def show_main_dashboard(engine: BudgetEngine):
             "Your budget file is set up and encrypted. There is no transaction "
             "data yet, so there is nothing to summarize.\n\n"
             "[bold]Get started in three steps:[/bold]\n"
-            "  1.  Open [info]config.toml[/info] and add your recurring income and expenses\n"
+            "  1.  Open [info]finance.toml[/info] and add your recurring income and expenses\n"
             "      (e.g. salary, rent) under [info][[recurring_transactions]][/info].\n"
             "  2.  Export a bank statement as CSV and drop it into the\n"
             "      [info]statements[/info] folder.\n"
@@ -715,11 +715,12 @@ def show_history_view(engine: BudgetEngine):
                     elif error_code == "WRONG_MONTH":
                         status_parts.append("[bold warning]⚠ Wrong Month[/bold warning]")
                     elif error_code == "VERIFIED":
-                        status_parts.append("[income]✔ Verified[/income]")
-                status = " | ".join(status_parts) if status_parts else ""
+                        status_parts.append("[income]✔ Matched[/income]")
+                status = " | ".join(status_parts) if status_parts else "[text_muted]—[/text_muted]"
 
                 trans_table.add_row(t['date'], description, amount_text, category, status)
             console.print(trans_table)
+            console.print("[text_muted]↻ = recurring · ✔ Matched = amount matches planned recurring amount · — = no flags[/text_muted]")
 
         Prompt.ask("\nPress Enter to select another month.")
 
@@ -1088,9 +1089,9 @@ def main():
                 console.print(f"\n[bold danger]Error:[/bold danger] {e}")
                 return
         except ValueError as e:
-            console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH}:[/bold danger]")
+            console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH} or finance.toml:[/bold danger]")
             console.print(f"[text_muted]{e}[/text_muted]")
-            console.print(f"[warning]Please fix your config.toml and try again.[/warning]\n")
+            console.print(f"[warning]Please fix your config.toml or finance.toml and try again.[/warning]\n")
             return
         except Exception as e:
             console.print(f"\n[bold danger]Error:[/bold danger] Failed to initialize. Corrupted data?")

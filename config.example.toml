@@ -1,13 +1,15 @@
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ Welcome to your budget configuration!                                     │
-# │ This file is the heart of your budget tracker.                            │
-# │ Fill it out with your financial details to get started.                   │
+# │ This file holds the stable, app-wide settings.                            │
+# │ Your growing financial data — recurring transactions, category rules,     │
+# │ and cash — lives in a separate file: finance.toml.                        │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 
 # SECURITY WARNING:
-# This file is NOT encrypted. Storing sensitive financial data or personally
-# identifiable information in this file is a security risk.
-# Ensure this file is stored in a secure, access-controlled location.
+# These files are NOT encrypted. This config.toml is mostly non-sensitive
+# (theme and CSV column mappings), but finance.toml holds your actual
+# financial data and is also stored in plain text. Keep both files in a
+# secure, access-controlled location.
 
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
@@ -34,26 +36,26 @@ total_money_as_of_day = 0
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ [importer]                                                                │
 # │ Maps your bank's CSV column names to what the app expects.                │
-# │ You can define multiple formats for different banks.                       │
-# │ The app will automatically detect the correct format based on the headers. │
+# │ You can define multiple formats for different banks.                      │
+# │ The app will automatically detect the correct format based on the headers.│
 # │                                                                           │
 # │ Optional fields:                                                          │
-# │ - `delimiter`: The character separating columns (default: ",").            │
-# │ - `reference_column`: A fallback column if the description is empty.       │
-# │ - `date_format`: The format of the date column (e.g., "%d.%m.%Y").         │
+# │ - `delimiter`: The character separating columns (default: ",").           │
+# │ - `reference_column`: A fallback column if the description is empty.      │
+# │ - `date_format`: The format of the date column (e.g., "%d.%m.%Y").        │
 # │   Common codes: %d (day), %m (month), %Y (4-digit year), %y (2-digit year).│
-# │   Example: "31.12.2023" would be "%d.%m.%Y"                                │
-# │ - `decimal_separator`: The character for decimals (default: ".").          │
-# │ - `thousands_separator`: The character for thousands (default: none).      │
+# │   Example: "31.12.2023" would be "%d.%m.%Y"                               │
+# │ - `decimal_separator`: The character for decimals (default: ".").         │
+# │ - `thousands_separator`: The character for thousands (default: none).     │
 # │                                                                           │
-# │ ACCOUNT BALANCE TRACKING (optional):                                       │
+# │ ACCOUNT BALANCE TRACKING (optional):                                      │
 # │ To see your "Total money I have" (all accounts + cash) in the Summary,    │
-# │ tell the app the balance of each account at ONE known moment in time.      │
-# │ The app then reconstructs the balance at any other date by adding all      │
-# │ transactions of that account imported after the snapshot date.             │
-# │   balance_snapshot      = 1234.56   # Balance at the snapshot date          │
-# │   balance_snapshot_date = "2025-01-01"  # YYYY-MM-DD (closing balance)      │
-# │ Leaving these out simply means that account is not included in the total.  │
+# │ tell the app the balance of each account at ONE known moment in time.     │
+# │ The app then reconstructs the balance at any other date by adding all     │
+# │ transactions of that account imported after the snapshot date.            │
+# │   balance_snapshot      = 1234.56   # Balance at the snapshot date        │
+# │   balance_snapshot_date = "2025-01-01"  # YYYY-MM-DD (closing balance)    │
+# │ Leaving these out simply means that account is not included in the total. │
 # ╰───────────────────────────────────────────────────────────────────────────╯
 [[importer.formats]]
 name               = "N26"
@@ -105,128 +107,3 @@ recurring     = "#E2B59A"  # predictable / committed transactions (prefixed ↻)
 warning       = "bold #E89B3C"  # approaching a limit, wrong month, duplicates skipped
 danger        = "#FA7070"  # over budget, mismatch, destructive actions, load errors
 info          = "#8FB8C9"  # file paths, config references, detected formats
-
-# ── Legacy keys (still accepted as aliases, can be removed) ───────────────────
-# accent_color                    = "#FFCF71"  # → heading
-# main_color                      = "#FBF6E2"  # → text
-# positive                        = "#A1C398"  # → income
-# negative                        = "#FA7070"  # → expense
-# recurring_transaction_highlight = "#E2B59A"  # → recurring
-
-
-# ╭───────────────────────────────────────────────────────────────────────────╮
-# │ [category_rules]                                                          │
-# │ Define keywords to automatically categorize your transactions.            │
-# │ The app scans the transaction's description for the keywords you define.  │
-# │ The matching is case-insensitive and works if the keyword is part of the  │
-# │ description. For example, a keyword "supermarket" will match              │
-# │ "Local Supermarket" and "SUPERMARKET INC.".                               │
-# │ Format: "CategoryName" = ["keyword1", "keyword2", ...]                    │
-# ╰───────────────────────────────────────────────────────────────────────────╯
-[category_rules]
-# --- Example Category Rules ---
-# "Groceries"   = ["supermarket", "grocery", "lidl", "aldi"]
-# "Rent"        = ["rent"]
-# "Utilities"   = ["electricity", "water", "gas", "internet"]
-# "Transport"   = ["uber", "lyft", "taxi", "public transport"]
-# "Dining Out"  = ["restaurant", "cafe", "food delivery"]
-# "Subscriptions" = ["netflix", "spotify", "hbo"]
-
-
-# ╭───────────────────────────────────────────────────────────────────────────╮
-# │ [recurring_transactions]                                                  │
-# │ This is the most important section for calculating your budget.           │
-# │ List all your predictable income and expenses here. The app uses this to  │
-# │ calculate your "normalized monthly budget."                               │
-# │                                                                           │
-# │ - `description`: A keyword used to identify transactions. A transaction   │
-# │   is marked as recurring if this keyword is found anywhere in its         │
-# │   description (case-insensitive). For example, "Spotify" will match       │
-# │   "PAYPAL *SPOTIFY*P3C321".                                               │
-# │ - `amount`: Use positive for income, negative for expenses.               │
-# │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
-# │ - `payment_month`: For non-monthly payments (recurrence_months > 1),      │
-# │   specify the month(s) when the payment actually occurs.                  │
-# │   Can be a single integer (e.g., 1 for Jan) or a list (e.g., [1, 7]).     │
-# │                                                                           │
-# │   TIP: If you leave `payment_month` out, the app will still detect the    │
-# │   transaction and prevent it from being deducted twice, but it won't be   │
-# │   able to warn you if the payment is missing or happens in the wrong month.│
-# │                                                                           │
-# │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │
-# │   This is optional. If omitted, it's active from the beginning.           │
-# │ - `end_date`: The date the recurring transaction can end (YYYY-MM-DD).    │
-# │   Also optional. If omitted, it remains active indefinitely.              │
-# │                                                                           │
-# │ NOTE: The monthly budget, for both the dashboard and history views, is      │
-# │       calculated based on which recurring transactions are active on the    │
-# │       first day of the respective month.                                    │
-# ╰───────────────────────────────────────────────────────────────────────────╯
-
-
-# ╭───────────────────────────────────────────────────────────────────────────╮
-# │ [cash]                                                                    │
-# │ Track the cash you have on hand. Unlike bank accounts, cash has no          │
-# │ transaction history, so you simply write down how much cash you have        │
-# │ whenever you think about it. Each entry records the amount and the date.    │
-# │                                                                             │
-# │ The app uses the most recent entry on or before the date being viewed       │
-# │ to figure out how much cash you had then.                                    │
-# │                                                                             │
-# │ This cash is added to your accounts' balances to produce the                 │
-# │ "Total money I have" figure shown in the Summary.                            │
-# ╰───────────────────────────────────────────────────────────────────────────╯
-[cash]
-# --- Example cash entries ---
-# entries = [
-#   { date = "2025-01-01", amount = 120.00 },
-#   { date = "2025-02-15", amount = 85.50  },
-# ]
-
-# --- Example Income ---
-# [[recurring_transactions]]
-# description       = "Monthly Salary"
-# amount            = 3000.00
-# recurrence_months = 1
-
-# --- Example Yearly Expense ---
-# The app automatically spreads this cost across the year in your budget.
-# e.g., -240 / 12 months = -20 per month.
-# [[recurring_transactions]]
-# description       = "Car Insurance"
-# amount            = -240.00
-# recurrence_months = 12
-# payment_month     = 1  # January
-# start_date        = "2023-01-01"
-# end_date          = "2023-12-31"
-
-# ╭───────────────────────────────────────────────────────────────────────────╮
-# │ PRICE CHANGES OVER TIME (amount_history)                                  │
-# │ If a recurring transaction's amount changes over time (e.g. a             │
-# │ subscription price increase), you do NOT need to duplicate the            │
-# │ entry with start/end dates. Keep one entry and list the past              │
-# │ prices under `amount_history`. Each item has a `from` date (when          │
-# │ the new price took effect) and the `amount` for that period.              │
-# │                                                                           │
-# │ The app uses the most recent price whose `from` date is not after         │
-# │ the month being calculated. This keeps historical budgets                 │
-# │ accurate and prevents false "amount mismatch" alerts - no more            │
-# │ entering the same subscription twice.                                     │
-# │                                                                           │
-# │ `amount` is optional when `amount_history` is given. If omitted, the      │
-# │ most recent history entry is used as the current/default price.           │
-# ╰───────────────────────────────────────────────────────────────────────────╯
-
-# --- Example subscription with a price change ---
-# The base `amount` (12.99) is the current price. Older prices are listed in
-# `amount_history`, oldest first. Past months automatically use their historical
-# price, so you never have to enter the same subscription twice.
-# [[recurring_transactions]]
-# description       = "Netflix"
-# amount            = 12.99          # Current price
-# recurrence_months = 1
-# amount_history = [
-#   { from = "2022-01-01", amount = 7.99 },
-#   { from = "2024-06-01", amount = 10.99 },
-#   { from = "2025-03-01", amount = 12.99 },
-# ]
