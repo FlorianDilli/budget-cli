@@ -1190,10 +1190,11 @@ def main():
         try:
             import toml
             temp_config = toml.load(config_path)
-            theme = temp_config.get("theme", {"accent_color": "#00FFFF", "main_color": "#00FFFF"})
+            theme = {"accent_color": "#00FFFF", "main_color": "#00FFFF", "positive": "#00FF00", "negative": "#FF0000"}
+            theme.update(temp_config.get("theme", {}))
         except (IOError, toml.TomlDecodeError) as e:
             console.print(f"[bold red]Error loading theme from {config_path}: {e}[/bold red]")
-            theme = {"accent_color": "#00FFFF", "main_color": "#00FFFF"}
+            theme = {"accent_color": "#00FFFF", "main_color": "#00FFFF", "positive": "#00FF00", "negative": "#FF0000"}
 
 
         password = show_password_prompt(is_initial_setup, theme, footer=debug_footer)
