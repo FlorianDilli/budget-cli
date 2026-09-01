@@ -4,4 +4,3 @@ simple-term-menu
 pycryptodome
 toml
 argon2-cffi
-sqlcipher3

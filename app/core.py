@@ -2,6 +2,7 @@ import os
 import toml
 import shutil
 import calendar
+from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, List, Tuple, Optional
@@ -158,33 +159,8 @@ class BudgetEngine:
 
     def _connect_to_db(self) -> None:
         """Derives the DB key and connects to the database."""
-        # The key for the database is derived from the user's password and a salt.
-        # This salt is stored in the database itself in the 'meta' table.
-        #
-        # 1. Connect to the database *without* a key to check if it's encrypted
-        #    and to retrieve the salt if it exists.
-        #
-        # The initial connection is made to an empty or existing database file.
-        # SQLCipher will transparently handle creating the file if it doesn't exist.
-        
-        self.db.connect(self.password, initial_setup=True)
-
-
-        # 2. Retrieve the salt. If it doesn't exist, create it.
-        db_salt_hex = self.db.get_meta('db_salt')
-        if db_salt_hex:
-            db_salt = bytes.fromhex(db_salt_hex)
-        else:
-            # This is a fresh database, so we create a new salt.
-            db_salt = os.urandom(16)
-            self.db.set_meta('db_salt', db_salt.hex())
-
-        # 3. Now that the salt is guaranteed to exist, connect to the database
-        # using the user's password. SQLCipher will handle the key derivation
-        # internally using the salt from the database.
         self.db.connect(self.password)
 
-        # 4. Derive a separate key for field-level encryption.
         encryption_salt_hex = self.db.get_meta('encryption_salt')
         if encryption_salt_hex:
             encryption_salt = bytes.fromhex(encryption_salt_hex)
@@ -192,7 +168,7 @@ class BudgetEngine:
             encryption_salt = self._get_or_create_encryption_salt()
 
         self._encryption_key = derive_key(self.password, encryption_salt)
-        self.password = None # Clear password from memory after use
+        self.password = None
 
     def _get_or_create_encryption_salt(self) -> bytes:
         """
@@ -1226,14 +1202,16 @@ class BudgetEngine:
         Performs a full reset of the application.
         Deletes all transactions and resets the encryption salt.
         """
-        # This is the most critical step: the database file must be deleted.
         if os.path.exists(self.db_path):
-            self.db.close() # Ensure the connection is closed before deleting
+            self.db.close()
             os.remove(self.db_path)
-            
-        # Also delete the config file so it gets recreated from the template on next run
+        salt_file = Path(self.db_path).with_suffix(".salt")
+        if salt_file.exists():
+            os.remove(salt_file)
         if os.path.exists(self.config_path):
             os.remove(self.config_path)
+        if os.path.exists(self.finance_path):
+            os.remove(self.finance_path)
 
     def _reset_state_and_reconnect(self) -> None:
         from datetime import datetime
@@ -1305,7 +1283,7 @@ class BudgetEngine:
                 self.db.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", ('encryption_salt', new_salt.hex()))
                 self.db.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", ('password_verifier', new_verifier.hex()))
 
-                # 8. Rekey the database itself (SQLCipher)
+                # 8. Rekey the database file encryption
                 self.db.rekey(new_password)
 
                 # Commit all changes
@@ -1327,7 +1305,7 @@ class BudgetEngine:
 
         except Exception as e:
             # If anything failed, we might need to restore from backup if the DB is corrupted
-            # but SQLCipher rekey and our transaction should protect us.
+            # but the file rekey and our transaction should protect us.
             # Still, let's inform the user.
             raise RuntimeError(f"Failed to change password: {e}")
 
