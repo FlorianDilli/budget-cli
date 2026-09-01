@@ -64,19 +64,48 @@ CONFIG_PATH = os.path.join(USER_DATA_BASE, "config.toml")
 console = Console()
 
 
+class _FallbackMenu:
+    def __init__(self, items, title=""):
+        self.items = items
+        self.title = title
+
+    def show(self):
+        if self.title:
+            print(self.title)
+        for i, item in enumerate(self.items, 1):
+            print(f"  {i}. {item}")
+        print()
+        try:
+            choice = input("Select an option (number, or press Enter to cancel): ").strip()
+        except EOFError:
+            return None
+        if not choice:
+            return None
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(self.items):
+                return idx
+        except ValueError:
+            pass
+        return None
+
+
 def build_menu(items, title=""):
     """Constructs a TerminalMenu with a consistent navigation footer.
 
     Pressing ESC no longer exits the application: a None result is treated
     by the callers as "stay on the current screen".
     """
-    menu = TerminalMenu(
-        items,
-        title=title,
-        quit_keys=("q", "ctrl-g"),
-        show_shortcut_hints=True,
-    )
-    return menu
+    try:
+        menu = TerminalMenu(
+            items,
+            title=title,
+            quit_keys=("q", "ctrl-g"),
+            show_shortcut_hints=True,
+        )
+        return menu
+    except FileNotFoundError:
+        return _FallbackMenu(items, title)
 
 
 def clear_terminal_full():
