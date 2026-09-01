@@ -941,7 +941,7 @@ def show_monthly_overview(engine: BudgetEngine):
     for s in summaries:
         is_current_month = (int(s['year']) == now.year and int(s['month']) == now.month)
         if is_current_month:
-            month_title = f"{datetime.strptime(f'{s['year']}-{s['month']}-01', '%Y-%m-%d').strftime('%B %Y')} [dim](incomplete)[/dim]"
+            month_title = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%B %Y") + " [dim](incomplete)[/dim]"
         else:
             month_title = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%B %Y")
         
