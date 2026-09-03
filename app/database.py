@@ -59,7 +59,6 @@ class DatabaseManager:
             os.chmod(self._tmp_db, 0o600)
 
         self._conn = sqlite3.connect(self._tmp_db, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.execute("PRAGMA synchronous=NORMAL;")
         self.setup_tables()
 
