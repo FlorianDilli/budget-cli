@@ -1043,7 +1043,7 @@ class BudgetEngine:
                 "year": year,
                 "month": month,
                 "budget": summary['allowed_monthly_spend'],
-                "total_spent": summary['total_transactions_sum'],
+                "total_spent": summary['monthly_expenses'],
                 "available": summary['available_to_spend'],
                 "total_money": summary['total_money'],
                 "currency": summary['currency']
