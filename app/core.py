@@ -2,8 +2,10 @@ import os
 import toml
 import shutil
 import calendar
+import math
+import random
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -1470,3 +1472,272 @@ class BudgetEngine:
                 continue
                 
         return updated_count
+
+    def predict_runway(
+        self,
+        mc_runs: int = 2000,
+        horizon_months: int = 24,
+        annual_inflation: float = 0.03,
+        alpha: float = 0.25,
+        spend_floor: float = 10.0
+    ) -> dict:
+        """Runs a Monte Carlo simulation to predict when the user might run out of money."""
+        today = datetime.now()
+        total_money = self.get_total_money_at(today)
+        current_balance = float(total_money['total'])
+
+        if current_balance <= 0:
+            return {
+                "status": "No Money",
+                "detail": "Current balance is zero or negative."
+            }
+
+        recurring_rules = []
+        for rt in self._get_recurring_transactions():
+            start_date_str = rt.get('start_date')
+            end_date_str = rt.get('end_date')
+
+            start_dt = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else date(1970, 1, 1)
+            end_dt = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else date(2099, 12, 31)
+
+            if not (start_dt <= today.date() <= end_dt):
+                continue
+
+            amount = float(self._get_effective_amount(rt, today))
+            dir_val = 1 if amount >= 0 else -1
+            amount_abs = abs(amount)
+
+            recurrence = rt.get('recurrence_months', 1)
+            if recurrence == 1:
+                freq = 'monthly'
+            elif recurrence == 3:
+                freq = 'quarterly'
+            elif recurrence == 12:
+                freq = 'annual'
+            else:
+                freq = 'monthly'
+
+            if start_date_str:
+                start_dt_parsed = datetime.strptime(start_date_str, '%Y-%m-%d')
+                day = start_dt_parsed.day
+            else:
+                day = 1
+
+            recurring_rules.append({
+                'amount': amount_abs,
+                'dir': dir_val,
+                'day': day,
+                'start': start_dt,
+                'end': end_dt,
+                'freq': freq
+            })
+
+        one_off_events = []
+
+        historical_spend = []
+        available_months = self.get_available_months()
+        past_months = []
+        for year, month in available_months:
+            y, m = int(year), int(month)
+            if datetime(y, m, 1) <= today:
+                past_months.append((y, m))
+
+        past_months.sort()
+        past_months = past_months[-12:]
+
+        for y, m in past_months:
+            transactions = self.db.get_transactions(year=str(y), month=str(m).zfill(2))
+            decrypted = self._decrypt_transactions(transactions)
+            monthly_spend = sum(abs(float(t['amount'])) for t in decrypted if not t['is_recurring'] and t['amount'] < 0)
+            historical_spend.append(monthly_spend)
+
+        return self._simulate_runway(
+            current_balance=current_balance,
+            start_date=today.date(),
+            recurring_rules=recurring_rules,
+            one_off_events=one_off_events,
+            historical_spend=historical_spend,
+            horizon_months=horizon_months,
+            mc_runs=mc_runs,
+            annual_inflation=annual_inflation,
+            alpha=alpha,
+            spend_floor=spend_floor
+        )
+
+    def _simulate_runway(
+        self,
+        current_balance: float,
+        start_date: date,
+        recurring_rules: list,
+        one_off_events: list,
+        historical_spend: list,
+        horizon_months: int = 24,
+        mc_runs: int = 2000,
+        annual_inflation: float = 0.03,
+        alpha: float = 0.25,
+        spend_floor: float = 10.0
+    ) -> dict:
+        horizon_months = max(2, horizon_months)
+        K = len(historical_spend)
+
+        for i in range(K):
+            historical_spend[i] = max(spend_floor, historical_spend[i])
+
+        mean_spend = sum(historical_spend) / K if K > 0 else spend_floor
+        use_lognormal = K < 6
+
+        if use_lognormal:
+            if K >= 2:
+                mean_val = mean_spend
+                s2 = sum((x - mean_val) ** 2 for x in historical_spend) / (K - 1)
+                sigma2 = math.log(1.0 + (s2 / (mean_val ** 2))) if mean_val > 0 else 0.04
+            else:
+                sigma2 = 0.04
+            mu = math.log(max(mean_spend, spend_floor)) - 0.5 * sigma2
+            sigma = math.sqrt(sigma2)
+
+        y = start_date.year
+        m_cur = start_date.month
+
+        months_info = []
+        for m in range(1, horizon_months + 1):
+            num_days = calendar.monthrange(y, m_cur)[1]
+            start_d = start_date.day if m == 1 else 1
+            months_info.append({
+                'm_idx': m, 'year': y, 'month': m_cur,
+                'days': num_days, 'start_day': start_d
+            })
+            m_cur += 1
+            if m_cur > 12:
+                m_cur = 1
+                y += 1
+
+        net_det_cumulative = []
+        net_det_full = []
+        net_det_recur_full = []
+
+        for info in months_info:
+            m = info['m_idx']
+            days = info['days']
+            start_d = info['start_day']
+            daily_total = [0.0] * (days + 1)
+            daily_recur = [0.0] * (days + 1)
+
+            for d in range(start_d, days + 1):
+                cur_d = date(info['year'], info['month'], d)
+
+                for r in recurring_rules:
+                    if not (r['start'] <= cur_d <= r['end']):
+                        continue
+                    freq = r['freq']
+                    fires = False
+                    if freq == 'monthly':
+                        fires = (d == min(r['day'], days))
+                    elif freq == 'weekly':
+                        fires = ((cur_d - r['start']).days % 7 == 0)
+                    elif freq == 'biweekly':
+                        fires = ((cur_d - r['start']).days % 14 == 0)
+                    elif freq == 'quarterly':
+                        month_diff = (cur_d.year - r['start'].year) * 12 + (cur_d.month - r['start'].month)
+                        fires = (month_diff % 3 == 0) and (d == min(r['day'], days))
+                    elif freq == 'annual':
+                        fires = (cur_d.month == r['start'].month) and (d == min(r['day'], days))
+
+                    if fires:
+                        flow = r['dir'] * r['amount']
+                        daily_total[d] += flow
+                        daily_recur[d] += flow
+
+                for e in one_off_events:
+                    if e['date'] == cur_d:
+                        daily_total[d] += e['dir'] * e['amount']
+
+            cum = [0.0] * (days + 1)
+            running = 0.0
+            for d in range(start_d, days + 1):
+                running += daily_total[d]
+                cum[d] = running
+
+            net_det_cumulative.append(cum)
+            net_det_full.append(cum[days] if days >= start_d else 0.0)
+            net_det_recur_full.append(sum(daily_recur))
+
+        monthly_inflation = annual_inflation / 12.0
+        tau = [float('inf')] * mc_runs
+
+        for r_idx in range(mc_runs):
+            balance = current_balance
+            for m_idx, info in enumerate(months_info):
+                m = m_idx + 1
+                days = info['days']
+                start_d = info['start_day']
+                active_days = days - start_d + 1
+
+                if use_lognormal:
+                    u = random.lognormvariate(mu, sigma)
+                else:
+                    u = random.choice(historical_spend)
+                u = max(spend_floor, u) * ((1.0 + monthly_inflation) ** (m - 1))
+
+                u_eff = u * (active_days / days) if m == 1 else u
+
+                cum_det = net_det_cumulative[m_idx]
+                insolvent = False
+                for d in range(start_d, days + 1):
+                    day_balance = balance + cum_det[d] - ((d - start_d + 1) / active_days * u_eff)
+                    if day_balance <= 0:
+                        tau[r_idx] = m
+                        insolvent = True
+                        break
+
+                if insolvent:
+                    break
+
+                balance = balance + net_det_full[m_idx] - u_eff
+
+        insolvent_runs = [t for t in tau if t <= horizon_months]
+        p_insolvency = len(insolvent_runs) / mc_runs
+
+        mid_inflation = (1.0 + monthly_inflation) ** (horizon_months / 2.0)
+        avg_recurring = sum(net_det_recur_full[1:]) / len(net_det_recur_full[1:]) if len(net_det_recur_full) > 1 else 0.0
+        structural_drift = avg_recurring - (mean_spend * mid_inflation)
+
+        if p_insolvency < alpha:
+            if structural_drift >= 0:
+                return {
+                    "status": "Sustainable",
+                    "structural_monthly_drift": round(structural_drift, 2),
+                    "detail": f"Structurally positive cash flow. Low risk (< {int(alpha*100)}%) of depletion within {horizon_months} months."
+                }
+            else:
+                return {
+                    "status": "Slow Depletion (Runway > H Months)",
+                    "structural_monthly_drift": round(structural_drift, 2),
+                    "detail": f"Negative recurring drift, but reserves are projected to last beyond {horizon_months} months with ≥ {int((1-alpha)*100)}% confidence."
+                }
+        else:
+            sorted_tau = sorted(tau)
+            k = int(math.ceil(alpha * mc_runs)) - 1
+            m_star = int(sorted_tau[k])
+
+            p_depletion = sum(1 for t in tau if t <= m_star) / mc_runs
+
+            depletion_info = months_info[m_star - 1]
+            depletion_month_str = f"{depletion_info['year']}-{depletion_info['month']:02d}"
+
+            if m_star > 1:
+                safe_info = months_info[m_star - 2]
+                last_safe_month_str = f"{safe_info['year']}-{safe_info['month']:02d}"
+                safe_runway = m_star - 1
+            else:
+                last_safe_month_str = "None"
+                safe_runway = 0
+
+            return {
+                "status": "Depletion Predicted",
+                "depletion_month": depletion_month_str,
+                "last_safe_month": last_safe_month_str,
+                "safe_runway_months": safe_runway,
+                "depletion_risk_pct": round(p_depletion * 100, 1),
+                "detail": f"Account reaches zero in or before {depletion_month_str} with {round(p_depletion*100, 1)}% probability. Safe runway is {safe_runway} months."
+            }

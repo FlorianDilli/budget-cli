@@ -977,6 +977,74 @@ def show_change_password_view(engine: BudgetEngine):
     Prompt.ask("\nPress Enter to return to the main menu.")
 
 
+def show_prediction_view(engine: BudgetEngine):
+    check_config_and_notify(engine)
+    console.clear()
+
+    console.print(Panel("[bold heading]Runway Prediction[/bold heading]", expand=False, border_style="border"))
+    console.print()
+
+    today = datetime.now()
+    total_money = engine.get_total_money_at(today)
+    if not total_money.get('configured'):
+        console.print("[warning]No account balances or cash entries are configured.[/warning]")
+        console.print("[text_muted]Please configure at least one account with a balance snapshot in config.toml,[/text_muted]")
+        console.print("[text_muted]or add cash entries in finance.toml.[/text_muted]")
+        Prompt.ask("\nPress Enter to return.")
+        return
+
+    with console.status("[bold heading]Running Monte Carlo simulation...[/bold heading]", spinner="dots"):
+        prediction = engine.predict_runway()
+
+    currency = engine.config['user']['currency_symbol']
+    round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+    current_balance_text = format_amount(Decimal(str(total_money['total'])), currency, None, round_amounts)
+
+    console.print(f"Current balance: {current_balance_text}")
+    console.print()
+
+    if prediction['status'] == 'No Money':
+        console.print(f"[danger]{prediction['detail']}[/danger]")
+        Prompt.ask("\nPress Enter to return.")
+        return
+
+    if prediction['status'] == 'Sustainable':
+        console.print(Panel(
+            f"[income]✔ {prediction['status']}[/income]\n\n"
+            f"Structural monthly drift: {prediction['structural_monthly_drift']} {currency}\n\n"
+            f"[text_muted]{prediction['detail']}[/text_muted]",
+            title="[bold heading]Prediction Result[/bold heading]",
+            border_style="income",
+            expand=False,
+            padding=(1, 2)
+        ))
+    elif prediction['status'] == 'Slow Depletion (Runway > H Months)':
+        console.print(Panel(
+            f"[warning]⚠ {prediction['status']}[/warning]\n\n"
+            f"Structural monthly drift: {prediction['structural_monthly_drift']} {currency}\n\n"
+            f"[text_muted]{prediction['detail']}[/text_muted]",
+            title="[bold heading]Prediction Result[/bold heading]",
+            border_style="warning",
+            expand=False,
+            padding=(1, 2)
+        ))
+    else:
+        console.print(Panel(
+            f"[danger]⚠ {prediction['status']}[/danger]\n\n"
+            f"Depletion month: [danger]{prediction['depletion_month']}[/danger]\n"
+            f"Last safe month: {prediction['last_safe_month']}\n"
+            f"Safe runway: {prediction['safe_runway_months']} months\n"
+            f"Depletion risk: {prediction['depletion_risk_pct']}%\n\n"
+            f"[text_muted]{prediction['detail']}[/text_muted]",
+            title="[bold heading]Prediction Result[/bold heading]",
+            border_style="danger",
+            expand=False,
+            padding=(1, 2)
+        ))
+
+    Prompt.ask("\nPress Enter to return.")
+
+
 def main():
     """The main entry point of the application."""
 
@@ -1035,6 +1103,7 @@ def main():
         menu_items = [
             "View History",
             "Months at a glance",
+            "Prediction",
             "Import Statements",
             "Change Master Password",
             "Delete Data",
@@ -1051,15 +1120,17 @@ def main():
         elif menu_index == 1:
             show_monthly_overview(engine)
         elif menu_index == 2:
-            run_importer(engine)
+            show_prediction_view(engine)
         elif menu_index == 3:
-            show_change_password_view(engine)
+            run_importer(engine)
         elif menu_index == 4:
+            show_change_password_view(engine)
+        elif menu_index == 5:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
                 clear_terminal_full()
                 break
-        elif menu_index == 5:
+        elif menu_index == 6:
             clear_terminal_full()
             break
 
