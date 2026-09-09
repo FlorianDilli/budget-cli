@@ -202,13 +202,19 @@ def read_masked_password(render_fn) -> str:
     password_chars: list[str] = []
     mask = ""
 
-    def redraw():
-        sys.stdout.write("\033[H")
+    def full_redraw():
+        sys.stdout.write("\033[H\033[J")
         sys.stdout.write(render_fn(mask))
-        sys.stdout.write("\033[J")
         sys.stdout.flush()
 
-    redraw()
+    full_redraw()
+
+    # Find the mask line in the freshly rendered screen.
+    screen = render_fn(mask)
+    lines = screen.split("\n")
+    old_line_idx = next(
+        (i for i, ln in enumerate(lines) if "Password:" in ln), None
+    )
 
     try:
         fd = sys.stdin.fileno()
@@ -227,7 +233,28 @@ def read_masked_password(render_fn) -> str:
                 elif ch >= " ":
                     password_chars.append(ch)
                 mask = "*" * len(password_chars)
-                redraw()
+
+                new_screen = render_fn(mask)
+                new_lines = new_screen.split("\n")
+                new_line_idx = next(
+                    (i for i, ln in enumerate(new_lines) if "Password:" in ln), None
+                )
+
+                if new_line_idx is not None:
+                    if old_line_idx is not None and old_line_idx != new_line_idx:
+                        sys.stdout.write(f"\033[{old_line_idx + 1};1H\033[K")
+                        sys.stdout.flush()
+                    sys.stdout.write(f"\033[{new_line_idx + 1};1H\033[K")
+                    sys.stdout.write(new_lines[new_line_idx])
+                    sys.stdout.flush()
+                    old_line_idx = new_line_idx
+                else:
+                    full_redraw()
+                    screen = render_fn(mask)
+                    lines = screen.split("\n")
+                    old_line_idx = next(
+                        (i for i, ln in enumerate(lines) if "Password:" in ln), None
+                    )
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     except (termios.error, OSError):
