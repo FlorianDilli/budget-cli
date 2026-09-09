@@ -124,6 +124,28 @@ def clear_terminal_full():
         sys.stdout.write("\033c")
         sys.stdout.flush()
 
+def _render_auth_line(prompt_label, mask):
+    """Render just the password input line so read_masked_password can
+    overwrite that single row without re-rendering the whole screen."""
+    display_mask = mask[:20]
+    AUTH_WIDTH = 48
+    AUTH_FIELD = 6 + len(prompt_label) + 1 + 20 + 1
+    AUTH_INDENT = 6
+    trailing = " " * max(0, AUTH_FIELD - (AUTH_INDENT + len(prompt_label) + 1 + len(display_mask) + 1))
+    auth_line = (
+        f"{' ' * AUTH_INDENT}{prompt_label} [red]{display_mask}[/red]█{trailing}"
+    )
+    cap = Console(
+        file=io.StringIO(),
+        theme=console.theme,
+        color_system=console.color_system,
+        highlight=False,
+        force_terminal=True,
+    )
+    cap.print(Text.from_markup(auth_line, justify="left"), end="")
+    return cap.file.getvalue()
+
+
 def _render_login_screen(theme, info_text, prompt_label, mask, footer):
     """Renders the complete login screen to a string.
 
@@ -192,7 +214,7 @@ def _terminal_width() -> int:
             return 80
 
 
-def read_masked_password(render_fn) -> str:
+def read_masked_password(render_fn, prompt_label="Password:") -> str:
     """Reads a password from the terminal without echoing it, rendering
     each typed character as a red asterisk followed by a solid block cursor.
     """
@@ -209,7 +231,6 @@ def read_masked_password(render_fn) -> str:
 
     full_redraw()
 
-    # Find the mask line in the freshly rendered screen.
     screen = render_fn(mask)
     lines = screen.split("\n")
     old_line_idx = next(
@@ -234,20 +255,11 @@ def read_masked_password(render_fn) -> str:
                     password_chars.append(ch)
                 mask = "*" * len(password_chars)
 
-                new_screen = render_fn(mask)
-                new_lines = new_screen.split("\n")
-                new_line_idx = next(
-                    (i for i, ln in enumerate(new_lines) if "Password:" in ln), None
-                )
-
-                if new_line_idx is not None:
-                    if old_line_idx is not None and old_line_idx != new_line_idx:
-                        sys.stdout.write(f"\033[{old_line_idx + 1};1H\033[K")
-                        sys.stdout.flush()
-                    sys.stdout.write(f"\033[{new_line_idx + 1};1H\033[K")
-                    sys.stdout.write(new_lines[new_line_idx])
+                if old_line_idx is not None:
+                    new_auth_line = _render_auth_line(prompt_label, mask)
+                    sys.stdout.write(f"\033[{old_line_idx + 1};1H\033[K")
+                    sys.stdout.write(new_auth_line)
                     sys.stdout.flush()
-                    old_line_idx = new_line_idx
                 else:
                     full_redraw()
                     screen = render_fn(mask)
@@ -272,7 +284,8 @@ def show_password_prompt(is_initial_setup: bool = False, theme=None, footer: str
     prompt_label = "Password:"
 
     password = read_masked_password(
-        lambda mask: _render_login_screen(theme, info_text, prompt_label, mask, footer)
+        lambda mask: _render_login_screen(theme, info_text, prompt_label, mask, footer),
+        prompt_label=prompt_label,
     )
     return password
 
