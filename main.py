@@ -124,7 +124,7 @@ def clear_terminal_full():
         sys.stdout.write("\033c")
         sys.stdout.flush()
 
-def _render_auth_line(prompt_label, mask):
+def _render_auth_line(theme, prompt_label, mask):
     """Render just the password input line so read_masked_password can
     overwrite that single row without re-rendering the whole screen."""
     display_mask = mask[:20]
@@ -137,7 +137,7 @@ def _render_auth_line(prompt_label, mask):
     )
     cap = Console(
         file=io.StringIO(),
-        theme=console.theme,
+        theme=theme,
         color_system=console.color_system,
         highlight=False,
         force_terminal=True,
@@ -214,7 +214,7 @@ def _terminal_width() -> int:
             return 80
 
 
-def read_masked_password(render_fn, prompt_label="Password:") -> str:
+def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str:
     """Reads a password from the terminal without echoing it, rendering
     each typed character as a red asterisk followed by a solid block cursor.
     """
@@ -256,7 +256,7 @@ def read_masked_password(render_fn, prompt_label="Password:") -> str:
                 mask = "*" * len(password_chars)
 
                 if old_line_idx is not None:
-                    new_auth_line = _render_auth_line(prompt_label, mask)
+                    new_auth_line = _render_auth_line(theme, prompt_label, mask)
                     sys.stdout.write(f"\033[{old_line_idx + 1};1H\033[K")
                     sys.stdout.write(new_auth_line)
                     sys.stdout.flush()
@@ -286,6 +286,7 @@ def show_password_prompt(is_initial_setup: bool = False, theme=None, footer: str
     password = read_masked_password(
         lambda mask: _render_login_screen(theme, info_text, prompt_label, mask, footer),
         prompt_label=prompt_label,
+        theme=theme,
     )
     return password
 
