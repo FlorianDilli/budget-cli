@@ -11,7 +11,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
-from rich.box import SQUARE
+from rich.box import ASCII
 from rich.columns import Columns
 from rich.live import Live
 from rich.theme import Theme
@@ -143,19 +143,11 @@ def _render_login_screen(theme, info_text, prompt_label, mask, footer):
         Text(""),
     )
 
-    terminal_width = _terminal_width()
-    banner_lines = BANNER_ART.splitlines()
-    banner_width = max((len(line) for line in banner_lines), default=48)
-    box_width = min(banner_width + 4, terminal_width - 2, 80)
-    if box_width < 40:
-        box_width = terminal_width - 2
-
     bordered_panel = Panel(
         inner,
         border_style="border",
-        box=SQUARE,
+        box=ASCII,
         padding=(0, 2),
-        width=box_width,
     )
 
     password_line = Text.from_markup(
