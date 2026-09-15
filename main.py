@@ -1,6 +1,5 @@
 import os
 import sys
-import io
 import getpass
 from datetime import datetime
 from decimal import Decimal
@@ -123,7 +122,7 @@ def clear_terminal_full():
         sys.stdout.flush()
 
 def _render_login_screen(theme, info_text, prompt_label, mask, footer):
-    """Renders the complete login screen to a string."""
+    """Renders the complete login screen to the console."""
     display_mask = mask[:20]
 
     banner_text = render_banner_text(theme)
@@ -160,34 +159,19 @@ def _render_login_screen(theme, info_text, prompt_label, mask, footer):
     )
 
     cap = Console(
-        width=_terminal_width(),
-        file=io.StringIO(),
         theme=theme,
         color_system=console.color_system,
         highlight=False,
         force_terminal=True,
     )
     cap.print(screen)
-    return cap.file.getvalue()
 
-
-
-def _terminal_width() -> int:
-    """Returns the current terminal width, falling back to a safe default."""
-    try:
-        return os.get_terminal_size(sys.stdout.fileno()).columns
-    except (OSError, ValueError):
-        try:
-            return os.get_terminal_size().columns
-        except (OSError, ValueError):
-            return 80
 
 
 def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str:
     """Reads a password from the terminal without echoing it."""
     clear_terminal_full()
-    screen = render_fn("")
-    console.print(screen)
+    render_fn("")
     return getpass.getpass("")
 
 
