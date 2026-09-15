@@ -1,6 +1,5 @@
 import os
 import sys
-import io
 import getpass
 import termios
 import tty
@@ -12,8 +11,9 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
-from rich.box import SQUARE, DOUBLE
+from rich.box import SQUARE
 from rich.columns import Columns
+from rich.live import Live
 from rich.theme import Theme
 
 from app.theme import build_theme, THEME_DEFAULTS
@@ -29,7 +29,7 @@ try:
 
     from app.core import BudgetEngine
     from app.importer import discover_csv_files, import_transactions
-    from app.banner import render_banner
+    from app.banner import render_banner, BANNER_ART
 
     try:
         import pyfiglet
@@ -124,83 +124,54 @@ def clear_terminal_full():
         sys.stdout.write("\033c")
         sys.stdout.flush()
 
-def _render_auth_line(theme, prompt_label, mask):
-    """Render just the password input line so read_masked_password can
-    overwrite that single row without re-rendering the whole screen."""
-    display_mask = mask[:20]
-    AUTH_WIDTH = 48
-    AUTH_FIELD = 6 + len(prompt_label) + 1 + 20 + 1
-    AUTH_INDENT = 6
-    trailing = " " * max(0, AUTH_FIELD - (AUTH_INDENT + len(prompt_label) + 1 + len(display_mask) + 1))
-    auth_line = (
-        f"{' ' * AUTH_INDENT}{prompt_label} [red]{display_mask}[/red]█{trailing}"
-    )
-    cap = Console(
-        file=io.StringIO(),
-        theme=theme,
-        color_system=console.color_system,
-        highlight=False,
-        force_terminal=True,
-    )
-    cap.print(Text.from_markup(auth_line, justify="left"), end="")
-    return cap.file.getvalue()
-
-
 def _render_login_screen(theme, info_text, prompt_label, mask, footer):
-    """Renders the complete login screen to a string.
+    """Builds the login screen as Rich renderables.
 
-    A fresh Console is built here (not the module-level one) so the login
-    screen is self-contained and always renders with the supplied theme.
+    Returns a Group renderable suitable for Live display.
     """
     display_mask = mask[:20]
-    AUTH_WIDTH = 48
-    AUTH_FIELD = 6 + len(prompt_label) + 1 + 20 + 1
-    AUTH_INDENT = 6
-    status_line = Text.from_markup(f"[bold]STATUS:[/bold] {info_text}")
-    trailing = " " * max(0, AUTH_FIELD - (AUTH_INDENT + len(prompt_label) + 1 + len(display_mask) + 1))
-    auth_line = (
-        f"{' ' * AUTH_INDENT}{prompt_label} [red]{display_mask}[/red]█{trailing}"
-    )
-    auth_panel = Panel(
-        Align.left(Text.from_markup(auth_line, justify="left")),
-        title="[bold]AUTHENTICATION[/bold]",
-        border_style="border",
-        expand=False,
-        padding=(1, 4),
-        width=AUTH_WIDTH,
-    )
+
+    banner_text = render_banner_text(theme)
+    status_line = Text.from_markup(f"[bold]{info_text}[/bold]", justify="center")
 
     inner = Group(
         Text(""),
         Text(""),
+        banner_text,
         Text(""),
-        render_banner_text(theme),
-        Align.center(status_line),
-        Text(""),
-        Text(""),
-        Align.center(auth_panel),
-        Text(""),
-        Text(""),
+        status_line,
         Text(""),
     )
 
-    columns = _terminal_width()
-    cap = Console(
-        width=columns,
-        file=io.StringIO(),
-        theme=theme,
-        color_system=console.color_system,
-        highlight=False,
-        force_terminal=True,
+    terminal_width = _terminal_width()
+    banner_lines = BANNER_ART.splitlines()
+    banner_width = max((len(line) for line in banner_lines), default=48)
+    box_width = min(banner_width + 4, terminal_width - 2, 80)
+    if box_width < 40:
+        box_width = terminal_width - 2
+
+    bordered_panel = Panel(
+        inner,
+        border_style="border",
+        box=SQUARE,
+        padding=(0, 2),
+        width=box_width,
     )
-    cap.print(
-        Panel(inner, border_style="heading", box=DOUBLE, padding=(1, 2))
+
+    password_line = Text.from_markup(
+        f"\n  {prompt_label} [red]{display_mask}[/red]█",
+        justify="left"
     )
-    cap.print()
-    if footer:
-        cap.print(Text(footer, style="text_muted"))
-    cap.print()
-    return cap.file.getvalue()
+
+    footer_text = Text(footer, style="text_muted") if footer else Text("")
+
+    return Group(
+        Align.center(bordered_panel),
+        password_line,
+        Text(""),
+        footer_text,
+    )
+
 
 
 def _terminal_width() -> int:
@@ -222,19 +193,11 @@ def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str
         return getpass.getpass("Password: ")
 
     password_chars: list[str] = []
-    mask = ""
-
-    def full_redraw():
-        sys.stdout.write("\033[H\033[J")
-        sys.stdout.write(render_fn(mask))
-        sys.stdout.flush()
-
-    full_redraw()
-
-    screen = render_fn(mask)
-    lines = screen.split("\n")
-    old_line_idx = next(
-        (i for i, ln in enumerate(lines) if "Password:" in ln), None
+    cap = Console(
+        theme=theme,
+        color_system=console.color_system,
+        highlight=False,
+        force_terminal=True,
     )
 
     try:
@@ -242,31 +205,20 @@ def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str
         old_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
         try:
-            while True:
-                ch = sys.stdin.read(1)
-                if ch in ("\r", "\n"):
-                    break
-                elif ch == "\x03":
-                    raise KeyboardInterrupt
-                elif ch == "\x7f" or ch == "\b":
-                    if password_chars:
-                        password_chars.pop()
-                elif ch >= " ":
-                    password_chars.append(ch)
-                mask = "*" * len(password_chars)
-
-                if old_line_idx is not None:
-                    new_auth_line = _render_auth_line(theme, prompt_label, mask)
-                    sys.stdout.write(f"\033[{old_line_idx + 1};1H\033[K")
-                    sys.stdout.write(new_auth_line)
-                    sys.stdout.flush()
-                else:
-                    full_redraw()
-                    screen = render_fn(mask)
-                    lines = screen.split("\n")
-                    old_line_idx = next(
-                        (i for i, ln in enumerate(lines) if "Password:" in ln), None
-                    )
+            with Live(render_fn(""), refresh_per_second=30, screen=True, console=cap) as live:
+                while True:
+                    ch = sys.stdin.read(1)
+                    if ch in ("\r", "\n"):
+                        break
+                    elif ch == "\x03":
+                        raise KeyboardInterrupt
+                    elif ch == "\x7f" or ch == "\b":
+                        if password_chars:
+                            password_chars.pop()
+                    elif ch >= " ":
+                        password_chars.append(ch)
+                    mask = "*" * len(password_chars)
+                    live.update(render_fn(mask))
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     except (termios.error, OSError):
