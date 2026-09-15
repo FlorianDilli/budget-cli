@@ -205,7 +205,7 @@ def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str
         old_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
         try:
-            with Live(render_fn(""), refresh_per_second=30, screen=True, console=cap) as live:
+            with Live(render_fn(""), refresh_per_second=10, screen=True, console=cap, auto_refresh=False) as live:
                 while True:
                     ch = sys.stdin.read(1)
                     if ch in ("\r", "\n"):
