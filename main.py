@@ -1,8 +1,7 @@
 import os
 import sys
+import io
 import getpass
-import termios
-import tty
 from datetime import datetime
 from decimal import Decimal
 from typing import Tuple, Optional
@@ -13,7 +12,6 @@ from rich.text import Text
 from rich.align import Align
 from rich.box import ASCII
 from rich.columns import Columns
-from rich.live import Live
 from rich.theme import Theme
 
 from app.theme import build_theme, THEME_DEFAULTS
@@ -125,10 +123,7 @@ def clear_terminal_full():
         sys.stdout.flush()
 
 def _render_login_screen(theme, info_text, prompt_label, mask, footer):
-    """Builds the login screen as Rich renderables.
-
-    Returns a Group renderable suitable for Live display.
-    """
+    """Renders the complete login screen to a string."""
     display_mask = mask[:20]
 
     banner_text = render_banner_text(theme)
@@ -157,12 +152,23 @@ def _render_login_screen(theme, info_text, prompt_label, mask, footer):
 
     footer_text = Text(footer, style="text_muted") if footer else Text("")
 
-    return Group(
+    screen = Group(
         Align.center(bordered_panel),
         password_line,
         Text(""),
         footer_text,
     )
+
+    cap = Console(
+        width=_terminal_width(),
+        file=io.StringIO(),
+        theme=theme,
+        color_system=console.color_system,
+        highlight=False,
+        force_terminal=True,
+    )
+    cap.print(screen)
+    return cap.file.getvalue()
 
 
 
@@ -178,45 +184,11 @@ def _terminal_width() -> int:
 
 
 def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str:
-    """Reads a password from the terminal without echoing it, rendering
-    each typed character as a red asterisk followed by a solid block cursor.
-    """
-    if not sys.stdin.isatty():
-        return getpass.getpass("Password: ")
-
-    password_chars: list[str] = []
-    cap = Console(
-        theme=theme,
-        color_system=console.color_system,
-        highlight=False,
-        force_terminal=True,
-    )
-
-    try:
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        tty.setraw(fd)
-        try:
-            with Live(render_fn(""), refresh_per_second=10, console=cap, auto_refresh=False) as live:
-                while True:
-                    ch = sys.stdin.read(1)
-                    if ch in ("\r", "\n"):
-                        break
-                    elif ch == "\x03":
-                        raise KeyboardInterrupt
-                    elif ch == "\x7f" or ch == "\b":
-                        if password_chars:
-                            password_chars.pop()
-                    elif ch >= " ":
-                        password_chars.append(ch)
-                    mask = "*" * len(password_chars)
-                    live.update(render_fn(mask), refresh=True)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    except (termios.error, OSError):
-        return getpass.getpass("Password: ")
-
-    return "".join(password_chars)
+    """Reads a password from the terminal without echoing it."""
+    clear_terminal_full()
+    screen = render_fn("")
+    console.print(screen)
+    return getpass.getpass("")
 
 
 def show_password_prompt(is_initial_setup: bool = False, theme=None, footer: str = "") -> str:
