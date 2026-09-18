@@ -4,4 +4,4 @@ simple-term-menu
 pycryptodome
 toml
 argon2-cffi
-plotext
+plotext>=5.0,<6.0
