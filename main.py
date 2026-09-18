@@ -969,6 +969,28 @@ def show_prediction_view(engine: BudgetEngine):
     Prompt.ask("\nPress Enter to return.")
 
 
+def _plotext_clear_data(plt):
+    """Clear plotext data, compatible with 5.x and 6.x."""
+    try:
+        plt.clear_data()
+    except AttributeError:
+        try:
+            plt.figure.clear.data()
+        except AttributeError:
+            pass
+
+
+def _plotext_clear_figure(plt):
+    """Clear plotext figure, compatible with 5.x and 6.x."""
+    try:
+        plt.clear_figure()
+    except AttributeError:
+        try:
+            plt.figure.clear()
+        except AttributeError:
+            pass
+
+
 def show_plot_view(engine: BudgetEngine):
     """Displays a terminal-native line plot of historical total money."""
     check_config_and_notify(engine)
@@ -1017,7 +1039,7 @@ def show_plot_view(engine: BudgetEngine):
 
     console.print()
     console.print("[bold heading]Total Money (accounts + cash)[/bold heading]")
-    plt.clear_data()
+    _plotext_clear_figure(plt)
     plt.plot_date(labels, totals, label="Total Money")
     plt.scatter_date(labels, totals)
     plt.title("Total Money Over Time")
@@ -1033,7 +1055,7 @@ def show_plot_view(engine: BudgetEngine):
 
     if any(v > 0 for v in cash_values):
         console.print("[bold heading]Cash on Hand[/bold heading]")
-        plt.clear_data()
+        _plotext_clear_figure(plt)
         plt.bar(cash_values)
         plt.bar_color("income")
         plt.title("Cash on Hand Over Time")
