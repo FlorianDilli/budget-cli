@@ -4,3 +4,4 @@ simple-term-menu
 pycryptodome
 toml
 argon2-cffi
+plotext

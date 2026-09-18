@@ -969,6 +969,84 @@ def show_prediction_view(engine: BudgetEngine):
     Prompt.ask("\nPress Enter to return.")
 
 
+def show_plot_view(engine: BudgetEngine):
+    """Displays a terminal-native line plot of historical total money."""
+    check_config_and_notify(engine)
+    summaries = engine.get_all_months_summary()
+    round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+
+    console.clear()
+    console.print(Panel("[bold heading]Total Money Over Time[/bold heading]", expand=False, border_style="border"))
+    console.print()
+
+    if not summaries:
+        console.print("[warning]No transactions found.[/warning]")
+        Prompt.ask("\nPress Enter to return to the main menu.")
+        return
+
+    has_total_money = any(s.get('total_money', {}).get('configured') for s in summaries)
+    if not has_total_money:
+        console.print("[warning]No account balances or cash entries are configured.[/warning]")
+        console.print("[text_muted]Configure balance_snapshot in config.toml or cash entries in finance.toml.[/text_muted]")
+        Prompt.ask("\nPress Enter to return to the main menu.")
+        return
+
+    labels = []
+    totals = []
+    cash_values = []
+    for s in reversed(summaries):
+        tm = s['total_money']
+        if tm.get('configured'):
+            date_label = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%b %Y")
+            labels.append(date_label)
+            totals.append(float(tm['total']))
+            cash_values.append(float(tm['cash']))
+
+    if not labels:
+        console.print("[warning]No total money data to plot.[/warning]")
+        Prompt.ask("\nPress Enter to return to the main menu.")
+        return
+
+    try:
+        import plotext as plt
+    except ImportError:
+        console.print("[bold danger]plotext is not installed.[/bold danger]")
+        console.print("[text_muted]Install it with: pip install plotext[/text_muted]")
+        Prompt.ask("\nPress Enter to return to the main menu.")
+        return
+
+    console.print()
+    console.print("[bold heading]Total Money (accounts + cash)[/bold heading]")
+    plt.clear_data()
+    plt.plot_date(labels, totals, label="Total Money")
+    plt.scatter_date(labels, totals)
+    plt.title("Total Money Over Time")
+    plt.xlabel("Month")
+    plt.ylabel("Amount")
+    if min(totals) > 0:
+        plt.ylim(min(totals) * 0.9, max(totals) * 1.1)
+    plt.tick_color("text_muted")
+    plt.plotsize(len(labels) + 5, 15)
+    plt.show()
+
+    console.print()
+
+    if any(v > 0 for v in cash_values):
+        console.print("[bold heading]Cash on Hand[/bold heading]")
+        plt.clear_data()
+        plt.bar(cash_values)
+        plt.bar_color("income")
+        plt.title("Cash on Hand Over Time")
+        plt.xlabel("Month")
+        plt.ylabel("Cash Amount")
+        plt.xticks(labels)
+        plt.plotsize(len(labels) + 5, 10)
+        plt.show()
+
+    console.print()
+    Prompt.ask("\nPress Enter to return to the main menu.")
+
+
 def main():
     """The main entry point of the application."""
 
@@ -1027,6 +1105,7 @@ def main():
         menu_items = [
             "View History",
             "Months at a glance",
+            "Plot Total Money",
             "Prediction",
             "Import Statements",
             "Change Master Password",
@@ -1044,17 +1123,19 @@ def main():
         elif menu_index == 1:
             show_monthly_overview(engine)
         elif menu_index == 2:
-            show_prediction_view(engine)
+            show_plot_view(engine)
         elif menu_index == 3:
-            run_importer(engine)
+            show_prediction_view(engine)
         elif menu_index == 4:
-            show_change_password_view(engine)
+            run_importer(engine)
         elif menu_index == 5:
+            show_change_password_view(engine)
+        elif menu_index == 6:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
                 clear_terminal_full()
                 break
-        elif menu_index == 6:
+        elif menu_index == 7:
             clear_terminal_full()
             break
 
