@@ -1,8 +1,10 @@
 import os
+import shutil
 import sys
 import getpass
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Tuple, Optional
 
 from rich.console import Console, Group
@@ -54,7 +56,8 @@ except ImportError as e:
     sys.exit(1)
 
 # --- Constants ---
-USER_DATA_BASE = os.getenv("BUDGET_DATA_PATH", "userdata")
+SCRIPT_DIR = Path(__file__).resolve().parent
+USER_DATA_BASE = os.getenv("BUDGET_DATA_PATH", str(SCRIPT_DIR / "userdata"))
 DB_PATH = os.path.join(USER_DATA_BASE, "budget.db")
 STATEMENTS_DIR = os.path.join(USER_DATA_BASE, "statements")
 CONFIG_PATH = os.path.join(USER_DATA_BASE, "config.toml")
@@ -144,16 +147,10 @@ def _render_login_screen(theme, info_text, prompt_label, mask, footer):
         padding=(0, 2),
     )
 
-    password_line = Text.from_markup(
-        f"\n  {prompt_label} [red]{display_mask}[/red]█",
-        justify="left"
-    )
-
     footer_text = Text(footer, style="text_muted") if footer else Text("")
 
     screen = Group(
         Align.center(bordered_panel),
-        password_line,
         Text(""),
         footer_text,
     )
@@ -172,7 +169,7 @@ def read_masked_password(render_fn, prompt_label="Password:", theme=None) -> str
     """Reads a password from the terminal without echoing it."""
     clear_terminal_full()
     render_fn("")
-    return getpass.getpass("")
+    return getpass.getpass(prompt_label)
 
 
 def show_password_prompt(is_initial_setup: bool = False, theme=None, footer: str = "") -> str:
@@ -993,14 +990,12 @@ def show_plot_view(engine: BudgetEngine):
 
     labels = []
     totals = []
-    cash_values = []
     for s in reversed(summaries):
         tm = s['total_money']
         if tm.get('configured'):
             date_label = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%b %Y")
             labels.append(date_label)
             totals.append(float(tm['total']))
-            cash_values.append(float(tm['cash']))
 
     if not labels:
         console.print("[warning]No total money data to plot.[/warning]")
@@ -1008,39 +1003,48 @@ def show_plot_view(engine: BudgetEngine):
         return
 
     try:
-        import plotext as plt
+        import plotille
     except ImportError:
-        console.print("[bold danger]plotext is not installed.[/bold danger]")
-        console.print("[text_muted]Install it with: pip install plotext[/text_muted]")
+        console.print("[bold danger]plotille is not installed.[/bold danger]")
+        console.print("[text_muted]Install it with: pip install plotille[/text_muted]")
         Prompt.ask("\nPress Enter to return to the main menu.")
         return
 
     console.print()
     console.print("[bold heading]Total Money (accounts + cash)[/bold heading]")
-    fig = plt.figure
-    fig.clear()
-    signal = fig.signal(labels, totals).lines()
-    fig.draw(signal)
-    fig.title("Total Money Over Time")
-    fig.label("Month", axis="x")
-    fig.label("Amount", axis="y")
-    if min(totals) > 0:
-        fig.ruler("y").lim(min(totals) * 0.9, max(totals) * 1.1)
-    fig.plot_size(len(labels) + 5, 15)
-    fig.show()
+    fig = plotille.Figure()
 
-    console.print()
+    term_width, term_height = shutil.get_terminal_size()
+    plot_width = max(40, min(term_width - 14, 100))
+    plot_height = max(8, min(term_height - 10, 15))
 
-    if any(v > 0 for v in cash_values):
-        console.print("[bold heading]Cash on Hand[/bold heading]")
-        fig = plt.figure
-        fig.clear()
-        fig.bar(labels, cash_values)
-        fig.title("Cash on Hand Over Time")
-        fig.label("Month", axis="x")
-        fig.label("Cash Amount", axis="y")
-        fig.plot_size(len(labels) + 5, 10)
-        fig.show()
+    y_min, y_max = min(totals), max(totals)
+    if y_min > 0:
+        fig.set_y_limits(min_=y_min * 0.9, max_=y_max * 1.1)
+
+    fig.width = plot_width
+    fig.height = plot_height
+    fig.set_x_limits(min_=0, max_=len(labels) - 1)
+    fig.x_label = 'Month'
+    fig.y_label = 'Amount'
+    fig.color_mode = 'rgb'
+
+    def format_x_tick(current, next_val):
+        idx = int(round(current))
+        if 0 <= idx < len(labels):
+            return labels[idx]
+        return str(int(current))
+
+    def format_y_tick(current, next_val):
+        return f"{current:,.0f}"
+
+    fig.x_ticks_fkt = format_x_tick
+    fig.y_ticks_fkt = format_y_tick
+
+    x = list(range(len(labels)))
+    fig.plot(x, totals, lc=(255, 207, 113), marker='o')
+
+    print(fig.show())
 
     console.print()
     Prompt.ask("\nPress Enter to return to the main menu.")
@@ -1075,7 +1079,7 @@ def main():
 
         password = show_password_prompt(is_initial_setup, theme, footer=debug_footer)
         try:
-            engine = BudgetEngine(DB_PATH, password, config_path=CONFIG_PATH)
+            engine = BudgetEngine(DB_PATH, password, config_path=config_path)
             console.push_theme(build_theme(engine.config))
 
             updated_count = engine.recategorize_transactions()
@@ -1132,9 +1136,11 @@ def main():
         elif menu_index == 6:
             result = show_delete_data_view(engine)
             if result == "reset_exit":
+                engine.db._encrypt_to_disk()
                 clear_terminal_full()
                 break
         elif menu_index == 7:
+            engine.db._encrypt_to_disk()
             clear_terminal_full()
             break
 

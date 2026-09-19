@@ -290,6 +290,11 @@ class DatabaseManager:
             except Exception:
                 pass
             self._conn = None
+        if self._tmp_db or self._tmpdir:
+            try:
+                self._encrypt_to_disk()
+            except Exception:
+                pass
         if self._tmpdir:
             try:
                 self._tmpdir.cleanup()

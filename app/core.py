@@ -29,7 +29,8 @@ class BudgetEngine:
         
         # Default to userdata/config.toml if not provided, but respect environment variable if set in main.py
         if config_path is None:
-            user_data_base = os.getenv("BUDGET_DATA_PATH", "userdata")
+            project_root = Path(__file__).resolve().parent.parent
+            user_data_base = os.getenv("BUDGET_DATA_PATH", str(project_root / "userdata"))
             self.config_path = os.path.join(user_data_base, "config.toml")
         else:
             self.config_path = config_path
