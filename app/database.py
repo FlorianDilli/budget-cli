@@ -51,7 +51,11 @@ class DatabaseManager:
                 plaintext = cipher.decrypt_and_verify(ct, tag)
             except Exception:
                 self.close()
-                raise RuntimeError("Failed to connect. Incorrect password or corrupted database file.")
+                raise RuntimeError(
+                    "Failed to connect. Incorrect password or corrupted database file. "
+                    "If you changed your password, data path, or recently moved the app, "
+                    "the encryption salt may have been reset and your data may be unrecoverable."
+                )
             self._tmp_db.write_bytes(plaintext)
             os.chmod(self._tmp_db, 0o600)
         else:

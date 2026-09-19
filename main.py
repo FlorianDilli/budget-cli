@@ -1,5 +1,6 @@
 import os
 import shutil
+import signal
 import sys
 import getpass
 from datetime import datetime
@@ -1058,91 +1059,113 @@ def main():
         sys.stdout.flush()
     else:
         console.clear()
-    debug_footer = "" if USER_DATA_BASE == "userdata" else f"Using custom data path: {USER_DATA_BASE}"
+    debug_footer = "" if os.getenv("BUDGET_DATA_PATH") is None else f"Using custom data path: {USER_DATA_BASE}"
 
     os.makedirs(USER_DATA_BASE, exist_ok=True)
     os.makedirs(STATEMENTS_DIR, exist_ok=True)
 
     engine = None
-    while not engine:
-        is_initial_setup = not os.path.exists(DB_PATH)
 
-        config_path = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "config.example.toml"
+    def _save_and_exit():
+        """Save encrypted DB to disk and clean up."""
+        if engine and engine.db and engine.db.is_connected():
+            try:
+                engine.db.close()
+            except Exception:
+                pass
 
-        try:
-            import toml
-            temp_config = toml.load(config_path)
-            theme = build_theme(temp_config)
-        except Exception as e:
-            console.print(f"[bold danger]Error loading theme from {config_path}: {e}[/bold danger]")
-            theme = _login_theme()
+    def _signal_handler(signum, frame):
+        """Handle termination signals gracefully."""
+        _save_and_exit()
+        sys.exit(0)
 
-        password = show_password_prompt(is_initial_setup, theme, footer=debug_footer)
-        try:
-            engine = BudgetEngine(DB_PATH, password, config_path=config_path)
-            console.push_theme(build_theme(engine.config))
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+    except (ValueError, OSError):
+        pass  # Signals not supported on all platforms (e.g. Windows)
 
-            updated_count = engine.recategorize_transactions()
-            if updated_count > 0:
-                console.print(f"\n[bold income]Config updated! {updated_count} transactions were updated on startup.[/bold income]")
+    try:
+        while not engine:
+            is_initial_setup = not os.path.exists(DB_PATH)
 
-        except RuntimeError as e:
-            if "Incorrect password" in str(e):
-                console.print(f"\n[bold danger]Wrong password, please try again.[/bold danger]\n")
-            else:
-                console.print(f"\n[bold danger]Error:[/bold danger] {e}")
+            config_path = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "config.example.toml"
+
+            try:
+                import toml
+                temp_config = toml.load(config_path)
+                theme = build_theme(temp_config)
+            except Exception as e:
+                console.print(f"[bold danger]Error loading theme from {config_path}: {e}[/bold danger]")
+                theme = _login_theme()
+
+            password = show_password_prompt(is_initial_setup, theme, footer=debug_footer)
+            try:
+                engine = BudgetEngine(DB_PATH, password, config_path=config_path)
+                console.push_theme(build_theme(engine.config))
+
+                updated_count = engine.recategorize_transactions()
+                if updated_count > 0:
+                    console.print(f"\n[bold income]Config updated! {updated_count} transactions were updated on startup.[/bold income]")
+
+            except RuntimeError as e:
+                if "Incorrect password" in str(e):
+                    console.print(f"\n[bold danger]Wrong password, please try again.[/bold danger]\n")
+                else:
+                    console.print(f"\n[bold danger]Error:[/bold danger] {e}")
+                    return
+            except ValueError as e:
+                console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH} or finance.toml:[/bold danger]")
+                console.print(f"[text_muted]{e}[/text_muted]")
+                console.print(f"[warning]Please fix your config.toml or finance.toml and try again.[/warning]\n")
                 return
-        except ValueError as e:
-            console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH} or finance.toml:[/bold danger]")
-            console.print(f"[text_muted]{e}[/text_muted]")
-            console.print(f"[warning]Please fix your config.toml or finance.toml and try again.[/warning]\n")
-            return
-        except Exception as e:
-            console.print(f"\n[bold danger]Error:[/bold danger] Failed to initialize. Corrupted data?")
-            console.print(f"[text_muted]{e}[/text_muted]")
-            return
+            except Exception as e:
+                console.print(f"\n[bold danger]Error:[/bold danger] Failed to initialize. Corrupted data?")
+                console.print(f"[text_muted]{e}[/text_muted]")
+                return
 
-    while True:
-        show_main_dashboard(engine)
+        while True:
+            show_main_dashboard(engine)
 
-        menu_items = [
-            "View History",
-            "Months at a glance",
-            "Plot Total Money",
-            "Prediction",
-            "Import Statements",
-            "Change Master Password",
-            "Delete Data",
-            "Exit"
-        ]
-        terminal_menu = build_menu(
-            menu_items,
-            title="\nWhat would you like to do?",
-        )
-        menu_index = terminal_menu.show()
+            menu_items = [
+                "View History",
+                "Months at a glance",
+                "Plot Total Money",
+                "Prediction",
+                "Import Statements",
+                "Change Master Password",
+                "Delete Data",
+                "Exit"
+            ]
+            terminal_menu = build_menu(
+                menu_items,
+                title="\nWhat would you like to do?",
+            )
+            menu_index = terminal_menu.show()
 
-        if menu_index == 0:
-            show_history_view(engine)
-        elif menu_index == 1:
-            show_monthly_overview(engine)
-        elif menu_index == 2:
-            show_plot_view(engine)
-        elif menu_index == 3:
-            show_prediction_view(engine)
-        elif menu_index == 4:
-            run_importer(engine)
-        elif menu_index == 5:
-            show_change_password_view(engine)
-        elif menu_index == 6:
-            result = show_delete_data_view(engine)
-            if result == "reset_exit":
-                engine.db._encrypt_to_disk()
+            if menu_index == 0:
+                show_history_view(engine)
+            elif menu_index == 1:
+                show_monthly_overview(engine)
+            elif menu_index == 2:
+                show_plot_view(engine)
+            elif menu_index == 3:
+                show_prediction_view(engine)
+            elif menu_index == 4:
+                run_importer(engine)
+            elif menu_index == 5:
+                show_change_password_view(engine)
+            elif menu_index == 6:
+                result = show_delete_data_view(engine)
+                if result == "reset_exit":
+                    clear_terminal_full()
+                    break
+            elif menu_index == 7:
                 clear_terminal_full()
                 break
-        elif menu_index == 7:
-            engine.db._encrypt_to_disk()
-            clear_terminal_full()
-            break
+
+    finally:
+        _save_and_exit()
 
     clear_terminal_full()
     console.print(f"[bold heading]Goodbye![/bold heading]")
