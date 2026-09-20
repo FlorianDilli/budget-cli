@@ -262,6 +262,48 @@ class BudgetEngine:
         except Exception:
             # This will catch decryption errors or failed checks
             raise RuntimeError("Incorrect password.")
+    @staticmethod
+    def _resolve_date(date_str: str) -> datetime:
+        """
+        Resolve a date string into a datetime object.
+
+        Supports:
+            - Exact dates: "YYYY-MM-DD" (e.g. "2025-12-31")
+            - "YYYY-MM-end": Last day of that month/year
+            - "YYYY-MM-start": First day of that month/year
+
+        Args:
+            date_str: The date expression to resolve.
+
+        Returns:
+            The resolved datetime.
+
+        Raises:
+            ValueError: If the date string is not a recognized format.
+        """
+        # Exact date: YYYY-MM-DD
+        try:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+
+        # Month-relative: YYYY-MM-end / YYYY-MM-start
+        match = re.match(r'^(\d{4})-(\d{2})-(end|start)$', date_str)
+        if match:
+            year = int(match.group(1))
+            month = int(match.group(2))
+            suffix = match.group(3)
+            if not (1 <= month <= 12):
+                raise ValueError(f"Invalid month in '{date_str}'.")
+            if suffix == 'end':
+                _, last_day = calendar.monthrange(year, month)
+                return datetime(year, month, last_day)
+            return datetime(year, month, 1)
+
+        raise ValueError(
+            f"Invalid date '{date_str}'. Use YYYY-MM-DD or YYYY-MM-end."
+        )
+
     def _get_recurring_transactions(self) -> List[Dict[str, Any]]:
         """
         Parses the recurring transactions from the config file.
@@ -302,16 +344,17 @@ class BudgetEngine:
             parsed_start = None
             if start_date:
                 try:
-                    parsed_start = datetime.strptime(start_date, '%Y-%m-%d')
-                except (ValueError, TypeError):
-                    raise ValueError(f"Invalid 'start_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
+                    parsed_start = self._resolve_date(start_date)
+                except ValueError:
+                    raise ValueError(f"Invalid 'start_date' for recurring transaction: '{description}'.")
 
             end_date = t.get('end_date')
+            parsed_end = None
             if end_date:
                 try:
-                    parsed_end = datetime.strptime(end_date, '%Y-%m-%d')
-                except (ValueError, TypeError):
-                    raise ValueError(f"Invalid 'end_date' format for recurring transaction: '{description}'. Use YYYY-MM-DD.")
+                    parsed_end = self._resolve_date(end_date)
+                except ValueError:
+                    raise ValueError(f"Invalid 'end_date' for recurring transaction: '{description}'.")
 
                 if parsed_start and parsed_end < parsed_start:
                     raise ValueError(
@@ -425,13 +468,13 @@ class BudgetEngine:
             # Check if the transaction is active based on its start/end dates
             start_date_str = t.get('start_date')
             if start_date_str:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                start_date = self._resolve_date(start_date_str)
                 if start_date > effective_date:
                     continue  # Skip this transaction if it hasn't started yet
 
             end_date_str = t.get('end_date')
             if end_date_str:
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                end_date = self._resolve_date(end_date_str)
                 if effective_date > end_date:
                     continue  # Skip if it has already ended
 
@@ -466,13 +509,13 @@ class BudgetEngine:
         """
         start_date_str = rt.get('start_date')
         if start_date_str:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            start_date = self._resolve_date(start_date_str)
             if year < start_date.year or (year == start_date.year and month < start_date.month):
                 return False
             
         end_date_str = rt.get('end_date')
         if end_date_str:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            end_date = self._resolve_date(end_date_str)
             if year > end_date.year or (year == end_date.year and month > end_date.month):
                 return False
         
@@ -1158,13 +1201,13 @@ class BudgetEngine:
             
             start_date_str = rt.get('start_date')
             if start_date_str:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                start_date = self._resolve_date(start_date_str)
                 if transaction_date < start_date:
                     continue
             
             end_date_str = rt.get('end_date')
             if end_date_str:
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                end_date = self._resolve_date(end_date_str)
                 if transaction_date > end_date:
                     continue
             
@@ -1498,8 +1541,8 @@ class BudgetEngine:
             start_date_str = rt.get('start_date')
             end_date_str = rt.get('end_date')
 
-            start_dt = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else date(1970, 1, 1)
-            end_dt = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else date(2099, 12, 31)
+            start_dt = self._resolve_date(start_date_str).date() if start_date_str else date(1970, 1, 1)
+            end_dt = self._resolve_date(end_date_str).date() if end_date_str else date(2099, 12, 31)
 
             if not (start_dt <= today.date() <= end_dt):
                 continue
@@ -1519,7 +1562,7 @@ class BudgetEngine:
                 freq = 'monthly'
 
             if start_date_str:
-                start_dt_parsed = datetime.strptime(start_date_str, '%Y-%m-%d')
+                start_dt_parsed = self._resolve_date(start_date_str)
                 day = start_dt_parsed.day
             else:
                 day = 1

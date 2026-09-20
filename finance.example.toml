@@ -52,10 +52,14 @@
 # │   transaction and prevent it from being deducted twice, but it won't be   │
 # │   able to warn you if the payment is missing or happens in the wrong month.│
 # │                                                                           │
-# │ - `start_date`: The date the recurring transaction begins (YYYY-MM-DD).   │
-# │   This is optional. If omitted, it's active from the beginning.           │
-# │ - `end_date`: The date the recurring transaction can end (YYYY-MM-DD).    │
-# │   Also optional. If omitted, it remains active indefinitely.              │
+# │ - `start_date`: The date the recurring transaction begins.              │
+# │   Accepts exact dates (YYYY-MM-DD) or shorthand forms like               │
+# │   `2026-01-start` (first day of the month) or `2026-10-end`             │
+# │   (last day of the month). This is optional. If omitted, it's active     │
+# │   from the beginning.                                                     │
+# │ - `end_date`: The date the recurring transaction can end.                 │
+# │   Accepts the same formats as `start_date`. If omitted, it remains        │
+# │   active indefinitely.                                                     │
 # │                                                                           │
 # │ NOTE: The monthly budget, for both the dashboard and history views, is    │
 # │       calculated based on which recurring transactions are active on the  │
@@ -78,6 +82,15 @@
 # payment_month     = 1  # January
 # start_date        = "2023-01-01"
 # end_date          = "2023-12-31"
+
+# --- Example with shorthand end date ---
+# You can also use YYYY-MM-end to mean "the last day of that month":
+# [[recurring_transactions]]
+# description       = "Rent"
+# amount            = -1200.00
+# recurrence_months = 1
+# start_date        = "2026-01-01"
+# end_date          = "2026-10-end"  # Last day of October 2026
 
 # ╭───────────────────────────────────────────────────────────────────────────╮
 # │ PRICE CHANGES OVER TIME (amount_history)                                  │
