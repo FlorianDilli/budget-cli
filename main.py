@@ -61,7 +61,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 USER_DATA_BASE = os.getenv("BUDGET_DATA_PATH", str(SCRIPT_DIR / "userdata"))
 DB_PATH = os.path.join(USER_DATA_BASE, "budget.db")
 STATEMENTS_DIR = os.path.join(USER_DATA_BASE, "statements")
-CONFIG_PATH = os.path.join(USER_DATA_BASE, "config.toml")
+CONFIG_PATH = os.path.join(USER_DATA_BASE, "settings.toml")
 
 # --- TUI components ---
 # console is created with a default theme; engine init replaces it with the
@@ -312,7 +312,7 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
             console.print(
                 Panel(
                     Text.from_markup(
-                        f"[income]✔ Your changes to [info]config.toml[/info] / [info]finance.toml[/info] were applied automatically.[/income]\n"
+                        f"[income]✔ Your changes to [info]settings.toml[/info] / [info]financials.toml[/info] were applied automatically.[/income]\n"
                         f"[text_muted]{count} transaction{'s' if count != 1 else ''} "
                         f"{'were' if count != 1 else 'was'} re-categorized and re-checked.[/text_muted]"
                     ),
@@ -325,7 +325,7 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
             console.print(
                 Panel(
                     Text.from_markup(
-                        "[income]✔ Your [info]config.toml[/info] / [info]finance.toml[/info] changes were picked up.[/income]\n"
+                        "[income]✔ Your [info]settings.toml[/info] / [info]financials.toml[/info] changes were picked up.[/income]\n"
                         "[text_muted]No transactions needed updating this time.[/text_muted]"
                     ),
                     border_style="income",
@@ -405,7 +405,7 @@ def show_main_dashboard(engine: BudgetEngine):
             "Your budget file is set up and encrypted. There is no transaction "
             "data yet, so there is nothing to summarize.\n\n"
             "[bold]Get started in three steps:[/bold]\n"
-            "  1.  Open [info]finance.toml[/info] and add your recurring income and expenses\n"
+            "  1.  Open [info]financials.toml[/info] and add your recurring income and expenses\n"
             "      (e.g. salary, rent) under [info][[recurring_transactions]][/info].\n"
             "  2.  Export a bank statement as CSV and drop it into the\n"
             "      [info]statements[/info] folder.\n"
@@ -910,8 +910,8 @@ def show_prediction_view(engine: BudgetEngine):
     total_money = engine.get_total_money_at(today)
     if not total_money.get('configured'):
         console.print("[warning]No account balances or cash entries are configured.[/warning]")
-        console.print("[text_muted]Please configure at least one account with a balance snapshot in config.toml,[/text_muted]")
-        console.print("[text_muted]or add cash entries in finance.toml.[/text_muted]")
+        console.print("[text_muted]Please configure at least one account with a balance snapshot in settings.toml,[/text_muted]")
+        console.print("[text_muted]or add cash entries in financials.toml.[/text_muted]")
         Prompt.ask("\nPress Enter to return.")
         return
 
@@ -985,7 +985,7 @@ def show_plot_view(engine: BudgetEngine):
     has_total_money = any(s.get('total_money', {}).get('configured') for s in summaries)
     if not has_total_money:
         console.print("[warning]No account balances or cash entries are configured.[/warning]")
-        console.print("[text_muted]Configure balance_snapshot in config.toml or cash entries in finance.toml.[/text_muted]")
+        console.print("[text_muted]Configure balance_snapshot in settings.toml or cash entries in financials.toml.[/text_muted]")
         Prompt.ask("\nPress Enter to return to the main menu.")
         return
 
@@ -1089,7 +1089,7 @@ def main():
         while not engine:
             is_initial_setup = not os.path.exists(DB_PATH)
 
-            config_path = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "config.example.toml"
+            config_path = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "settings.example.toml"
 
             try:
                 import toml
@@ -1115,9 +1115,9 @@ def main():
                     console.print(f"\n[bold danger]Error:[/bold danger] {e}")
                     return
             except ValueError as e:
-                console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH} or finance.toml:[/bold danger]")
+                console.print(f"\n[bold danger]Invalid configuration in {CONFIG_PATH} or financials.toml:[/bold danger]")
                 console.print(f"[text_muted]{e}[/text_muted]")
-                console.print(f"[warning]Please fix your config.toml or finance.toml and try again.[/warning]\n")
+                console.print(f"[warning]Please fix your settings.toml or financials.toml and try again.[/warning]\n")
                 return
             except Exception as e:
                 console.print(f"\n[bold danger]Error:[/bold danger] Failed to initialize. Corrupted data?")

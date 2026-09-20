@@ -1,0 +1,144 @@
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ Welcome to financials.toml — your financial data file.                       │
+# │ This holds the parts of your budget that grow over time, kept separate    │
+# │ from settings.toml so both files stay short and easy to navigate:           │
+# │   • [category_rules]          — keyword → category mappings               │
+# │   • [[recurring_transactions]] — your predictable income & expenses       │
+# │   • [cash]                    — cash-on-hand snapshots                    │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# SECURITY WARNING:
+# This file is NOT encrypted and contains your real financial data (income,
+# expenses, cash on hand). Storing it somewhere unsafe is a security risk.
+# Keep it in a secure, access-controlled location.
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [category_rules]                                                          │
+# │ Define keywords to automatically categorize your transactions.            │
+# │ The app scans the transaction's description for the keywords you define.  │
+# │ The matching is case-insensitive and works if the keyword is part of the  │
+# │ description. For example, a keyword "supermarket" will match              │
+# │ "Local Supermarket" and "SUPERMARKET INC.".                               │
+# │ Format: "CategoryName" = ["keyword1", "keyword2", ...]                    │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[category_rules]
+# --- Example Category Rules ---
+# "Groceries"   = ["supermarket", "grocery", "lidl", "aldi"]
+# "Rent"        = ["rent"]
+# "Utilities"   = ["electricity", "water", "gas", "internet"]
+# "Transport"   = ["uber", "lyft", "taxi", "public transport"]
+# "Dining Out"  = ["restaurant", "cafe", "food delivery"]
+# "Subscriptions" = ["netflix", "spotify", "hbo"]
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [[recurring_transactions]]                                                │
+# │ This is the most important section for calculating your budget.           │
+# │ List all your predictable income and expenses here. The app uses this to  │
+# │ calculate your "normalized monthly budget."                               │
+# │                                                                           │
+# │ - `description`: A keyword used to identify transactions. A transaction   │
+# │   is marked as recurring if this keyword is found anywhere in its         │
+# │   description (case-insensitive). For example, "Spotify" will match       │
+# │   "PAYPAL *SPOTIFY*P3C321".                                               │
+# │ - `amount`: Use positive for income, negative for expenses.               │
+# │ - `recurrence_months`: How often it occurs (1=monthly, 3=quarterly, etc.) │
+# │ - `payment_month`: For non-monthly payments (recurrence_months > 1),      │
+# │   specify the month(s) when the payment actually occurs.                  │
+# │   Can be a single integer (e.g., 1 for Jan) or a list (e.g., [1, 7]).     │
+# │                                                                           │
+# │   TIP: If you leave `payment_month` out, the app will still detect the    │
+# │   transaction and prevent it from being deducted twice, but it won't be   │
+# │   able to warn you if the payment is missing or happens in the wrong month.│
+# │                                                                           │
+# │ - `start_date`: The date the recurring transaction begins.              │
+# │   Accepts exact dates (YYYY-MM-DD) or shorthand forms like               │
+# │   `2026-01-start` (first day of the month) or `2026-10-end`             │
+# │   (last day of the month). This is optional. If omitted, it's active     │
+# │   from the beginning.                                                     │
+# │ - `end_date`: The date the recurring transaction can end.                 │
+# │   Accepts the same formats as `start_date`. If omitted, it remains        │
+# │   active indefinitely.                                                     │
+# │                                                                           │
+# │ NOTE: The monthly budget, for both the dashboard and history views, is    │
+# │       calculated based on which recurring transactions are active on the  │
+# │       first day of the respective month.                                  │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# --- Example Income ---
+# [[recurring_transactions]]
+# description       = "Monthly Salary"
+# amount            = 3000.00
+# recurrence_months = 1
+
+# --- Example Yearly Expense ---
+# The app automatically spreads this cost across the year in your budget.
+# e.g., -240 / 12 months = -20 per month.
+# [[recurring_transactions]]
+# description       = "Car Insurance"
+# amount            = -240.00
+# recurrence_months = 12
+# payment_month     = 1  # January
+# start_date        = "2023-01-01"
+# end_date          = "2023-12-31"
+
+# --- Example with shorthand end date ---
+# You can also use YYYY-MM-end to mean "the last day of that month":
+# [[recurring_transactions]]
+# description       = "Rent"
+# amount            = -1200.00
+# recurrence_months = 1
+# start_date        = "2026-01-01"
+# end_date          = "2026-10-end"  # Last day of October 2026
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ PRICE CHANGES OVER TIME (amount_history)                                  │
+# │ If a recurring transaction's amount changes over time (e.g. a             │
+# │ subscription price increase), you do NOT need to duplicate the            │
+# │ entry with start/end dates. Keep one entry and list the past              │
+# │ prices under `amount_history`. Each item has a `from` date (when          │
+# │ the new price took effect) and the `amount` for that period.              │
+# │                                                                           │
+# │ The app uses the most recent price whose `from` date is not after         │
+# │ the month being calculated. This keeps historical budgets                 │
+# │ accurate and prevents false "amount mismatch" alerts - no more            │
+# │ entering the same subscription twice.                                     │
+# │                                                                           │
+# │ `amount` is optional when `amount_history` is given. If omitted, the      │
+# │ most recent history entry is used as the current/default price.           │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# --- Example subscription with a price change ---
+# The base `amount` (12.99) is the current price. Older prices are listed in
+# `amount_history`, oldest first. Past months automatically use their historical
+# price, so you never have to enter the same subscription twice.
+# [[recurring_transactions]]
+# description       = "Netflix"
+# amount            = 12.99          # Current price
+# recurrence_months = 1
+# amount_history = [
+#   { from = "2022-01-01", amount = 7.99 },
+#   { from = "2024-06-01", amount = 10.99 },
+#   { from = "2025-03-01", amount = 12.99 },
+# ]
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [cash]                                                                    │
+# │ Track the cash you have on hand. Unlike bank accounts, cash has no        │
+# │ transaction history, so you simply write down how much cash you have      │
+# │ whenever you think about it. Each entry records the amount and the date.  │
+# │                                                                           │
+# │ The app uses the most recent entry on or before the date being viewed     │
+# │ to figure out how much cash you had then.                                 │
+# │                                                                           │
+# │ This cash is added to your accounts' balances to produce the              │
+# │ "Total money I have" figure shown in the Summary.                         │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[cash]
+# --- Example cash entries ---
+# entries = [
+#   { date = "2025-01-01", amount = 120.00 },
+#   { date = "2025-02-15", amount = 85.50  },
+# ]

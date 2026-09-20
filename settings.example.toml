@@ -1,0 +1,109 @@
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ Welcome to your budget configuration!                                     │
+# │ This file holds the stable, app-wide settings.                            │
+# │ Your growing financial data — recurring transactions, category rules,     │
+# │ and cash — lives in a separate file: financials.toml.                        │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+
+# SECURITY WARNING:
+# These files are NOT encrypted. This settings.toml is mostly non-sensitive
+# (theme and CSV column mappings), but financials.toml holds your actual
+# financial data and is also stored in plain text. Keep both files in a
+# secure, access-controlled location.
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [user]                                                                    │
+# │ Basic user-specific settings.                                             │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[user]
+currency_symbol = "EUR"      # Your currency symbol (e.g., "$", "£", "¥")
+round_amounts       = false    # If true, all amounts will be displayed as rounded values
+
+# Day of the month (1-31) used to measure "Total money I have" in the Monthly
+# Overview table. Because your balance is a wave (rent early, paycheck late),
+# measuring every month at the same point in the cycle makes the numbers
+# comparable. For example:
+#   - set to 28 to measure just before payday (your typical peak)
+#   - set to 2  to measure just after rent (your typical trough)
+# For the current month, the configured day is never in the future: if it hasn't
+# happened yet, today is used instead.
+# Leave at 0 (or remove the line) for the default behaviour: today for the
+# current month, or the last day of the month for past months.
+total_money_as_of_day = 0
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [importer]                                                                │
+# │ Maps your bank's CSV column names to what the app expects.                │
+# │ You can define multiple formats for different banks.                      │
+# │ The app will automatically detect the correct format based on the headers.│
+# │                                                                           │
+# │ Optional fields:                                                          │
+# │ - `delimiter`: The character separating columns (default: ",").           │
+# │ - `reference_column`: A fallback column if the description is empty.      │
+# │ - `date_format`: The format of the date column (e.g., "%d.%m.%Y").        │
+# │   Common codes: %d (day), %m (month), %Y (4-digit year), %y (2-digit year).│
+# │   Example: "31.12.2023" would be "%d.%m.%Y"                               │
+# │ - `decimal_separator`: The character for decimals (default: ".").         │
+# │ - `thousands_separator`: The character for thousands (default: none).     │
+# │                                                                           │
+# │ ACCOUNT BALANCE TRACKING (optional):                                      │
+# │ To see your "Total money I have" (all accounts + cash) in the Summary,    │
+# │ tell the app the balance of each account at ONE known moment in time.     │
+# │ The app then reconstructs the balance at any other date by adding all     │
+# │ transactions of that account imported after the snapshot date.            │
+# │   balance_snapshot      = 1234.56   # Balance at the snapshot date        │
+# │   balance_snapshot_date = "2025-01-01"  # YYYY-MM-DD (closing balance)    │
+# │ Leaving these out simply means that account is not included in the total. │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[[importer.formats]]
+name               = "N26"
+date_column        = "Value Date"
+description_column = "Partner Name"
+reference_column   = "Payment Reference"
+amount_column      = "Amount (EUR)"
+delimiter          = ","
+date_format        = "%Y.%m.%d"
+decimal_separator  = "."
+# Balance at one known moment (used for the "Total money I have" calculation).
+# The snapshot is treated as the CLOSING balance of that day, so transactions on
+# the snapshot date are already included in it.
+balance_snapshot      = 1234.56
+balance_snapshot_date = "2025-01-01"
+
+[[importer.formats]]
+name               = "GLS"
+date_column        = "Buchungstag"
+description_column = "Name Zahlungsbeteiligter"
+reference_column   = "Verwendungszweck"
+amount_column      = "Betrag"
+delimiter          = ";"
+date_format        = "%d.%m.%Y"
+decimal_separator  = ","
+# balance_snapshot      = 500.00
+# balance_snapshot_date = "2025-01-01"
+
+
+# ╭───────────────────────────────────────────────────────────────────────────╮
+# │ [theme]                                                                   │
+# │ Personalize the look of the app.                                          │
+# │ Use hex codes for colors (e.g., "#FF5733").                               │
+# ╰───────────────────────────────────────────────────────────────────────────╯
+[theme]
+# ── Structure (recedes from content) ──────────────────────────────────────────
+text          = "#FBF6E2"  # body copy and general UI text
+text_muted    = "#9A9382"  # secondary text — dates, hints, metadata
+border        = "#4F4A3E"  # panel borders and rule lines
+heading       = "bold #FFCF71"  # section titles — the single "look here" color
+
+# ── Money ─────────────────────────────────────────────────────────────────────
+income        = "#A1C398"  # money in (also used for success/verified states)
+expense       = "#FA7070"  # money out
+recurring     = "#E2B59A"  # predictable / committed transactions (prefixed ↻)
+
+# ── Signals (rare, high-salience — what red/yellow/green now mean) ─────────────
+#   Use a compound style like "bold #FA7070 on #2E0808" for maximum urgency.
+warning       = "bold #E89B3C"  # approaching a limit, wrong month, duplicates skipped
+danger        = "#FA7070"  # over budget, mismatch, destructive actions, load errors
+info          = "#8FB8C9"  # file paths, config references, detected formats

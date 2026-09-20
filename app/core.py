@@ -27,18 +27,18 @@ class BudgetEngine:
         self.db_path = db_path
         self.password = password
         
-        # Default to userdata/config.toml if not provided, but respect environment variable if set in main.py
+        # Default to userdata/settings.toml if not provided, but respect environment variable if set in main.py
         if config_path is None:
             project_root = Path(__file__).resolve().parent.parent
             user_data_base = os.getenv("BUDGET_DATA_PATH", str(project_root / "userdata"))
-            self.config_path = os.path.join(user_data_base, "config.toml")
+            self.config_path = os.path.join(user_data_base, "settings.toml")
         else:
             self.config_path = config_path
 
-        # finance.toml holds the data that grows over time (category rules,
-        # recurring transactions, cash) and lives next to config.toml.
+        # financials.toml holds the data that grows over time (category rules,
+        # recurring transactions, cash) and lives next to settings.toml.
         config_dir = os.path.dirname(self.config_path)
-        self.finance_path = os.path.join(config_dir, "finance.toml")
+        self.finance_path = os.path.join(config_dir, "financials.toml")
 
         self.db = DatabaseManager(self.db_path)
         self._encryption_key = None
@@ -79,8 +79,8 @@ class BudgetEngine:
         """Loads the user's configuration.
 
         Stable, app-wide settings (user, theme, importer) come from
-        config.toml, while the data that grows over time (category_rules,
-        recurring_transactions, cash) comes from finance.toml. The two are
+        settings.toml, while the data that grows over time (category_rules,
+        recurring_transactions, cash) comes from financials.toml. The two are
         merged into a single dict so the rest of the engine is unchanged.
         """
         self._ensure_config_files_exist()
@@ -159,9 +159,9 @@ class BudgetEngine:
         return config
 
     def _ensure_config_files_exist(self) -> None:
-        """Creates config.toml and finance.toml from their examples if missing."""
+        """Creates settings.toml and financials.toml from their examples if missing."""
         if not os.path.exists(self.config_path):
-            example_path = "config.example.toml"
+            example_path = "settings.example.toml"
             if not os.path.exists(example_path):
                 # Fallback in case the example file is missing.
                 with open(self.config_path, "w") as f:
@@ -170,7 +170,7 @@ class BudgetEngine:
                 shutil.copy(example_path, self.config_path)
 
         if not os.path.exists(self.finance_path):
-            finance_example = "finance.example.toml"
+            finance_example = "financials.example.toml"
             if not os.path.exists(finance_example):
                 with open(self.finance_path, "w") as f:
                     toml.dump(self._default_finance(), f)
