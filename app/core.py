@@ -1595,7 +1595,7 @@ class BudgetEngine:
             monthly_spend = sum(abs(float(t['amount'])) for t in decrypted if not t['is_recurring'] and t['amount'] < 0)
             historical_spend.append(monthly_spend)
 
-        return self._simulate_runway(
+        result = self._simulate_runway(
             current_balance=current_balance,
             start_date=today.date(),
             recurring_rules=recurring_rules,
@@ -1607,6 +1607,10 @@ class BudgetEngine:
             alpha=alpha,
             spend_floor=spend_floor
         )
+        result['historical_months_used'] = len(past_months)
+        result['mc_runs'] = mc_runs
+        result['horizon_months'] = horizon_months
+        return result
 
     def _simulate_runway(
         self,
@@ -1755,7 +1759,7 @@ class BudgetEngine:
                 }
             else:
                 return {
-                    "status": "Slow Depletion (Runway > H Months)",
+                    "status": "Slow depletion expected",
                     "structural_monthly_drift": round(structural_drift, 2),
                     "detail": f"Negative recurring drift, but reserves are projected to last beyond {horizon_months} months with ≥ {int((1-alpha)*100)}% confidence."
                 }
@@ -1778,7 +1782,7 @@ class BudgetEngine:
                 safe_runway = 0
 
             return {
-                "status": "Depletion Predicted",
+                "status": "Depletion likely",
                 "depletion_month": depletion_month_str,
                 "last_safe_month": last_safe_month_str,
                 "safe_runway_months": safe_runway,

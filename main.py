@@ -903,7 +903,7 @@ def show_prediction_view(engine: BudgetEngine):
     check_config_and_notify(engine)
     console.clear()
 
-    console.print(Panel("[bold heading]Runway Prediction[/bold heading]", expand=False, border_style="border"))
+    console.print(Panel("[bold heading]Simulate the future[/bold heading]", expand=False, border_style="border"))
     console.print()
 
     today = datetime.now()
@@ -922,7 +922,12 @@ def show_prediction_view(engine: BudgetEngine):
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)
     current_balance_text = format_amount(Decimal(str(total_money['total'])), currency, None, round_amounts)
 
-    console.print(f"Current balance: {current_balance_text}")
+    hist_months = prediction.get('historical_months_used', 12)
+    mc_runs = prediction.get('mc_runs', 2000)
+    horizon = prediction.get('horizon_months', 24)
+
+    console.print(f"[text_muted]The following prediction is based on the past {hist_months} months of transactions "
+                  f"and {mc_runs} simulated possible futures over the next {horizon} months.[/text_muted]")
     console.print()
 
     if prediction['status'] == 'No Money':
@@ -932,37 +937,43 @@ def show_prediction_view(engine: BudgetEngine):
 
     if prediction['status'] == 'Sustainable':
         console.print(Panel(
-            f"[income]✔ {prediction['status']}[/income]\n\n"
-            f"Structural monthly drift: {prediction['structural_monthly_drift']} {currency}\n\n"
+            f"[income]✔ Sustainable[/income]\n\n"
+            f"Your recurring income exceeds expenses by [income]{prediction['structural_monthly_drift']} {currency}[/income] per month.\n\n"
             f"[text_muted]{prediction['detail']}[/text_muted]",
             title="[bold heading]Prediction Result[/bold heading]",
             border_style="income",
             expand=False,
             padding=(1, 2)
         ))
-    elif prediction['status'] == 'Slow Depletion (Runway > H Months)':
+        console.print(f"Current balance: {current_balance_text}")
+    elif prediction['status'] == 'Slow depletion expected':
         console.print(Panel(
-            f"[warning]⚠ {prediction['status']}[/warning]\n\n"
-            f"Structural monthly drift: {prediction['structural_monthly_drift']} {currency}\n\n"
+            f"[warning]⚠ Slow depletion expected[/warning]\n\n"
+            f"Your balance may run out after the {horizon}-month simulation horizon.\n\n"
             f"[text_muted]{prediction['detail']}[/text_muted]",
             title="[bold heading]Prediction Result[/bold heading]",
             border_style="warning",
             expand=False,
             padding=(1, 2)
         ))
+        console.print(f"Current balance: {current_balance_text}")
     else:
+        depletion_month = prediction['depletion_month']
+        safe_runway = prediction['safe_runway_months']
+        risk_pct = prediction['depletion_risk_pct']
+
         console.print(Panel(
-            f"[danger]⚠ {prediction['status']}[/danger]\n\n"
-            f"Depletion month: [danger]{prediction['depletion_month']}[/danger]\n"
-            f"Last safe month: {prediction['last_safe_month']}\n"
-            f"Safe runway: {prediction['safe_runway_months']} months\n"
-            f"Depletion risk: {prediction['depletion_risk_pct']}%\n\n"
+            f"[danger]⚠ Depletion likely[/danger]\n\n"
+            f"in {depletion_month}\n\n"
+            f"Your balance reaches zero in about {safe_runway} months in many simulated futures.\n\n"
             f"[text_muted]{prediction['detail']}[/text_muted]",
             title="[bold heading]Prediction Result[/bold heading]",
             border_style="danger",
             expand=False,
             padding=(1, 2)
         ))
+        console.print(f"Likelihood of this prediction: [danger]{risk_pct}%[/danger]")
+        console.print(f"Current balance: {current_balance_text}")
 
     Prompt.ask("\nPress Enter to return.")
 
@@ -1131,7 +1142,7 @@ def main():
                 "View History",
                 "Months at a glance",
                 "Plot Total Money",
-                "Prediction",
+                "Simulate the future",
                 "Import Statements",
                 "Change Master Password",
                 "Delete Data",
