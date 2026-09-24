@@ -1095,6 +1095,21 @@ class BudgetEngine:
         
         return summaries
 
+    def get_budget_forecast(self, months=12):
+        today = datetime.now()
+        forecast = []
+        year = today.year
+        month = today.month
+        for i in range(1, months + 1):
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+            effective_date = datetime(year, month, 1)
+            budget = self._get_normalized_budget(effective_date=effective_date)
+            forecast.append({'year': year, 'month': month, 'budget': budget, 'currency': self.config['user']['currency_symbol']})
+        return forecast
+
     def _get_category_from_rules(self, description: str) -> str:
         """Assigns a category based on keywords in the description."""
         # Ensure 'category_rules' exists in the config, default to empty dict

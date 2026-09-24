@@ -1088,6 +1088,36 @@ def show_plot_view(engine: BudgetEngine):
     Prompt.ask("\n[ Back to Main Menu ]")
 
 
+def show_budget_forecast_view(engine):
+    check_config_and_notify(engine)
+    clear_terminal_full()
+
+    console.print(Panel('[bold heading]Budget Forecast[/bold heading]', expand=False, border_style='border'))
+    console.print()
+
+    forecast = engine.get_budget_forecast(12)
+    currency = engine.config['user']['currency_symbol']
+    round_amounts = engine.config.get('user', {}).get('round_amounts', False)
+
+    if not forecast:
+        console.print('[warning]No budget data available.[/warning]')
+        Prompt.ask('\n[ Back to Main Menu ]')
+        return
+
+    table = Table(expand=True, border_style='border', show_lines=True)
+    table.add_column('Month', style='heading')
+    table.add_column('Budget', justify='right')
+
+    for item in forecast:
+        month_str = datetime(item['year'], item['month'], 1).strftime('%B %Y')
+        budget_text = format_amount(Decimal(str(item['budget'])), currency, None, round_amounts)
+        table.add_row(month_str, budget_text)
+
+    console.print()
+    console.print(table)
+    Prompt.ask('\n[ Back to Main Menu ]')
+
+
 def main():
     """The main entry point of the application."""
 
@@ -1167,6 +1197,7 @@ def main():
                 "📊  View & Analysis": [
                     "View History",
                     "Months at a glance",
+                    "Budget Forecast",
                     "Plot Total Money",
                     "Simulate the future",
                 ],
@@ -1193,6 +1224,9 @@ def main():
             elif flat_items[menu_index] == "Months at a glance":
                 clear_terminal_full()
                 show_monthly_overview(engine)
+            elif flat_items[menu_index] == "Budget Forecast":
+                clear_terminal_full()
+                show_budget_forecast_view(engine)
             elif flat_items[menu_index] == "Plot Total Money":
                 clear_terminal_full()
                 show_plot_view(engine)
