@@ -1006,16 +1006,17 @@ def show_plot_view(engine: BudgetEngine):
     for s in reversed(summaries):
         tm = s['total_money']
         if tm.get('configured'):
-            as_of_date = engine.get_total_money_as_of_date(int(s['year']), int(s['month']))
-            date_label = as_of_date.strftime("%b %Y")
-            day_label = f"{date_label} (day {as_of_date.day})"
-            labels.append(day_label)
+            date_label = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%b %Y")
+            labels.append(date_label)
             totals.append(float(tm['total']))
 
     if not labels:
         console.print("[warning]No total money data to plot.[/warning]")
         Prompt.ask("\n[ Back to Main Menu ]")
         return
+
+    configured_day = engine.get_total_money_as_of_day()
+    day_info = f"Total money measured as of day {configured_day} of each month" if configured_day else "Total money measured at month-end"
 
     try:
         import plotille
@@ -1027,6 +1028,7 @@ def show_plot_view(engine: BudgetEngine):
 
     console.print()
     console.print("[bold heading]Total Money (accounts + cash)[/bold heading]")
+    console.print(f"[text_muted]{day_info}[/text_muted]")
     fig = plotille.Figure()
 
     term_width, term_height = shutil.get_terminal_size()
