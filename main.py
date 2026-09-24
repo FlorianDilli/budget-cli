@@ -480,7 +480,7 @@ def show_history_view(engine: BudgetEngine):
             console.print()
             console.print()
             console.print("[warning]No transactions found.[/warning]")
-            Prompt.ask("\nPress Enter to return to the main menu.")
+            Prompt.ask("\n[ Back to Main Menu ]")
             return
 
         def format_month_display(year, month):
@@ -629,7 +629,7 @@ def run_importer(engine: BudgetEngine):
     csv_files = discover_csv_files(STATEMENTS_DIR)
     if not csv_files:
         console.print("[warning]No CSV files found in '{dir}'.[/warning]".format(dir=STATEMENTS_DIR))
-        Prompt.ask("\n[text_muted][Enter] Back to menu[/text_muted]")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     file_list = ""
@@ -698,7 +698,7 @@ def run_importer(engine: BudgetEngine):
             padding=(1, 4)
         ))
 
-    Prompt.ask("\n[text_muted][Enter] Back to menu[/text_muted]")
+    Prompt.ask("\n[ Back to Main Menu ]")
 
 
 def show_monthly_overview(engine: BudgetEngine):
@@ -713,7 +713,7 @@ def show_monthly_overview(engine: BudgetEngine):
 
     if not summaries:
         console.print("[warning]No transactions found.[/warning]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     now = datetime.now()
@@ -790,7 +790,7 @@ def show_monthly_overview(engine: BudgetEngine):
             table.add_row(month_title, budget_text, spent_text, remaining_text)
 
     console.print(table)
-    Prompt.ask("\nPress Enter to return to the main menu.")
+    Prompt.ask("\n[ Back to Main Menu ]")
 
 
 def show_delete_data_view(engine: BudgetEngine):
@@ -815,7 +815,7 @@ def show_delete_data_view(engine: BudgetEngine):
         available_months = engine.get_available_months()
         if not available_months:
             console.print("[warning]No transaction data found to delete.[/warning]")
-            Prompt.ask("\nPress Enter to return.")
+            Prompt.ask("\n[ Back to Main Menu ]")
             return
 
         month_map = {f"{year}-{month}": (year, month) for year, month in available_months}
@@ -842,7 +842,7 @@ def show_delete_data_view(engine: BudgetEngine):
             else:
                 console.print("\nDeletion cancelled.")
 
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
 
     elif menu_index == 1:
         console.print("\n[bold danger]This will permanently delete all your data, including transactions and your password salt.[/bold danger]")
@@ -856,10 +856,10 @@ def show_delete_data_view(engine: BudgetEngine):
                 return "reset_exit"
             except Exception as e:
                 console.print(f"\n[bold danger]Error during reset:[/bold danger] {e}")
-                Prompt.ask("\nPress Enter to return to the main menu.")
+                Prompt.ask("\n[ Back to Main Menu ]")
         else:
             console.print("\nFull reset cancelled.")
-            Prompt.ask("\nPress Enter to return to the main menu.")
+            Prompt.ask("\n[ Back to Main Menu ]")
 
     elif menu_index == 2 or menu_index is None:
         return
@@ -880,12 +880,12 @@ def show_change_password_view(engine: BudgetEngine):
 
     if new_password != confirm_password:
         console.print(f"\n[bold danger]Error: New passwords do not match.[/bold danger]")
-        Prompt.ask("\nPress Enter to return.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     if not new_password:
         console.print(f"\n[bold danger]Error: Password cannot be empty.[/bold danger]")
-        Prompt.ask("\nPress Enter to return.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     if Confirm.ask("\nAre you sure you want to change your password?"):
@@ -896,7 +896,7 @@ def show_change_password_view(engine: BudgetEngine):
         except Exception as e:
             console.print(f"\n[bold danger]Error changing password:[/bold danger] {e}")
 
-    Prompt.ask("\nPress Enter to return to the main menu.")
+    Prompt.ask("\n[ Back to Main Menu ]")
 
 
 def show_prediction_view(engine: BudgetEngine):
@@ -912,7 +912,7 @@ def show_prediction_view(engine: BudgetEngine):
         console.print("[warning]No account balances or cash entries are configured.[/warning]")
         console.print("[text_muted]Please configure at least one account with a balance snapshot in settings.toml,[/text_muted]")
         console.print("[text_muted]or add cash entries in financials.toml.[/text_muted]")
-        Prompt.ask("\nPress Enter to return.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     with console.status("[bold heading]Running Monte Carlo simulation...[/bold heading]", spinner="dots"):
@@ -932,7 +932,7 @@ def show_prediction_view(engine: BudgetEngine):
 
     if prediction['status'] == 'No Money':
         console.print(f"[danger]{prediction['detail']}[/danger]")
-        Prompt.ask("\nPress Enter to return.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     if prediction['status'] == 'Sustainable':
@@ -975,7 +975,7 @@ def show_prediction_view(engine: BudgetEngine):
         console.print(f"Likelihood of this prediction: [danger]{risk_pct}%[/danger]")
         console.print(f"Current balance: {current_balance_text}")
 
-    Prompt.ask("\nPress Enter to return.")
+    Prompt.ask("\n[ Back to Main Menu ]")
 
 
 def show_plot_view(engine: BudgetEngine):
@@ -990,14 +990,14 @@ def show_plot_view(engine: BudgetEngine):
 
     if not summaries:
         console.print("[warning]No transactions found.[/warning]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     has_total_money = any(s.get('total_money', {}).get('configured') for s in summaries)
     if not has_total_money:
         console.print("[warning]No account balances or cash entries are configured.[/warning]")
         console.print("[text_muted]Configure balance_snapshot in settings.toml or cash entries in financials.toml.[/text_muted]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     labels = []
@@ -1011,7 +1011,7 @@ def show_plot_view(engine: BudgetEngine):
 
     if not labels:
         console.print("[warning]No total money data to plot.[/warning]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     try:
@@ -1019,7 +1019,7 @@ def show_plot_view(engine: BudgetEngine):
     except ImportError:
         console.print("[bold danger]plotille is not installed.[/bold danger]")
         console.print("[text_muted]Install it with: pip install plotille[/text_muted]")
-        Prompt.ask("\nPress Enter to return to the main menu.")
+        Prompt.ask("\n[ Back to Main Menu ]")
         return
 
     console.print()
@@ -1059,7 +1059,7 @@ def show_plot_view(engine: BudgetEngine):
     print(fig.show())
 
     console.print()
-    Prompt.ask("\nPress Enter to return to the main menu.")
+    Prompt.ask("\n[ Back to Main Menu ]")
 
 
 def main():
