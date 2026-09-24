@@ -337,7 +337,7 @@ def check_config_and_notify(engine: BudgetEngine) -> dict:
 
 
 def format_reload_time(timestamp: float) -> str:
-    """Formats a config reload timestamp relative to now."""
+    """Formats a file modification timestamp relative to now."""
     if not timestamp:
         return "unknown"
 
@@ -348,36 +348,37 @@ def format_reload_time(timestamp: float) -> str:
     if delta.total_seconds() < 0:
         return "just now"
 
-    same_day = reloaded.date() == now.date()
+    total_seconds = delta.total_seconds()
 
-    if same_day and delta.total_seconds() < 3600:
-        minutes = int(delta.total_seconds() // 60)
+    if total_seconds < 3600:
+        minutes = int(total_seconds // 60)
         if minutes <= 0:
             return "just now"
         return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
 
-    if same_day:
-        hours = int(delta.total_seconds() // 3600)
+    if total_seconds < 86400:
+        hours = int(total_seconds // 3600)
         return f"{hours} hour{'s' if hours != 1 else ''} ago"
 
-    days_diff = (now.date() - reloaded.date()).days
-    if days_diff == 1:
-        return f"yesterday at {reloaded.strftime('%H:%M')}"
-
-    return f"on {reloaded.strftime('%Y-%m-%d')} at {reloaded.strftime('%H:%M')}"
+    days_diff = int(total_seconds // 86400)
+    return f"{days_diff} day{'s' if days_diff != 1 else ''} ago"
 
 
 def show_status_footer(engine: BudgetEngine):
-    """Renders a footer line showing the data path and last config reload."""
+    """Renders a footer line showing the data path and last modification times of settings.toml and financials.toml."""
     data_path = os.path.abspath(USER_DATA_BASE)
-    reload_display = format_reload_time(getattr(engine, "_config_mtime", None))
+    settings_display = format_reload_time(getattr(engine, "_config_mtime", None))
+    finance_display = format_reload_time(getattr(engine, "_finance_mtime", None))
 
     footer = Text(justify="center")
     footer.append("Data: ", style="text_muted")
     footer.append(data_path, style="info")
     footer.append("   •   ", style="text_muted")
-    footer.append("Config reloaded ", style="text_muted")
-    footer.append(reload_display, style="info")
+    footer.append("settings.toml last modified ", style="text_muted")
+    footer.append(settings_display, style="info")
+    footer.append("   •   ", style="text_muted")
+    footer.append("financials.toml last modified ", style="text_muted")
+    footer.append(finance_display, style="info")
 
     console.print()
     console.print(footer)
