@@ -395,7 +395,7 @@ def show_main_dashboard(engine: BudgetEngine):
 
     top_spending_view = engine.get_top_spending_for_month(year, month, limit=10)
 
-    console.clear()
+    clear_terminal_full()
 
     console.print(Align.center(render_banner_text(None)))
     console.print()
@@ -470,7 +470,7 @@ def show_history_view(engine: BudgetEngine):
     while True:
         available_months = engine.get_available_months()
         if not available_months:
-            console.clear()
+            clear_terminal_full()
             console.print(
                 Panel(
                     f"[bold heading]Budget CLI[/bold heading]",
@@ -502,7 +502,7 @@ def show_history_view(engine: BudgetEngine):
             prev_year = year
         month_menu_items.append("[ Back to Main Menu ]")
 
-        console.clear()
+        clear_terminal_full()
         console.print(Panel(f"[bold heading]Transaction History[/bold heading]", expand=False, border_style="border"))
         console.print()
         console.print()
@@ -530,7 +530,7 @@ def show_history_view(engine: BudgetEngine):
         summary = engine.get_monthly_summary(year, month)
         transactions = engine.get_transactions_for_month(year, month)
 
-        console.clear()
+        clear_terminal_full()
 
         console.print(
             Panel(
@@ -622,7 +622,7 @@ def show_history_view(engine: BudgetEngine):
 def run_importer(engine: BudgetEngine):
     """Handles the logic for importing transactions from CSV files."""
     check_config_and_notify(engine)
-    console.clear()
+    clear_terminal_full()
 
     console.print(Panel("[bold heading]Import Transactions[/bold heading]", expand=False, border_style="border"))
     console.print()
@@ -708,7 +708,7 @@ def show_monthly_overview(engine: BudgetEngine):
     summaries = engine.get_all_months_summary()
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)
 
-    console.clear()
+    clear_terminal_full()
     console.print(Panel("[bold heading]Months at a glance[/bold heading]", expand=False, border_style="border"))
     console.print()
 
@@ -796,7 +796,7 @@ def show_monthly_overview(engine: BudgetEngine):
 
 def show_delete_data_view(engine: BudgetEngine):
     """Handles the UI for deleting data."""
-    console.clear()
+    clear_terminal_full()
     console.print(Panel("[bold danger]Delete Data[/bold danger]", expand=False, border_style="border"))
     console.print()
     console.print()
@@ -868,7 +868,7 @@ def show_delete_data_view(engine: BudgetEngine):
 
 def show_change_password_view(engine: BudgetEngine):
     """Handles the UI for changing the master password."""
-    console.clear()
+    clear_terminal_full()
     console.print(Panel("[bold heading]Change Master Password[/bold heading]", expand=False, border_style="border"))
     console.print()
     console.print("Changing your password will re-encrypt all your data.")
@@ -902,7 +902,7 @@ def show_change_password_view(engine: BudgetEngine):
 
 def show_prediction_view(engine: BudgetEngine):
     check_config_and_notify(engine)
-    console.clear()
+    clear_terminal_full()
 
     console.print(Panel("[bold heading]Simulate the future[/bold heading]", expand=False, border_style="border"))
     console.print()
@@ -985,7 +985,7 @@ def show_plot_view(engine: BudgetEngine):
     summaries = engine.get_all_months_summary()
     round_amounts = engine.config.get('user', {}).get('round_amounts', False)
 
-    console.clear()
+    clear_terminal_full()
     console.print(Panel("[bold heading]Total Money Over Time[/bold heading]", expand=False, border_style="border"))
     console.print()
 
@@ -1006,8 +1006,10 @@ def show_plot_view(engine: BudgetEngine):
     for s in reversed(summaries):
         tm = s['total_money']
         if tm.get('configured'):
-            date_label = datetime.strptime(f"{s['year']}-{s['month']}-01", "%Y-%m-%d").strftime("%b %Y")
-            labels.append(date_label)
+            as_of_date = engine.get_total_money_as_of_date(int(s['year']), int(s['month']))
+            date_label = as_of_date.strftime("%b %Y")
+            day_label = f"{date_label} (day {as_of_date.day})"
+            labels.append(day_label)
             totals.append(float(tm['total']))
 
     if not labels:
@@ -1067,10 +1069,9 @@ def main():
     """The main entry point of the application."""
 
     if sys.stdout.isatty():
-        sys.stdout.write("\033[2J\033[3J\033[H")
-        sys.stdout.flush()
+        clear_terminal_full()
     else:
-        console.clear()
+        clear_terminal_full()
     debug_footer = "" if os.getenv("BUDGET_DATA_PATH") is None else f"Using custom data path: {USER_DATA_BASE}"
 
     os.makedirs(USER_DATA_BASE, exist_ok=True)
@@ -1156,18 +1157,25 @@ def main():
             menu_index = terminal_menu.show()
 
             if menu_index == 0:
+                clear_terminal_full()
                 show_history_view(engine)
             elif menu_index == 1:
+                clear_terminal_full()
                 show_monthly_overview(engine)
             elif menu_index == 2:
+                clear_terminal_full()
                 show_plot_view(engine)
             elif menu_index == 3:
+                clear_terminal_full()
                 show_prediction_view(engine)
             elif menu_index == 4:
+                clear_terminal_full()
                 run_importer(engine)
             elif menu_index == 5:
+                clear_terminal_full()
                 show_change_password_view(engine)
             elif menu_index == 6:
+                clear_terminal_full()
                 result = show_delete_data_view(engine)
                 if result == "reset_exit":
                     clear_terminal_full()
