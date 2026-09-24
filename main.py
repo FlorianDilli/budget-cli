@@ -111,10 +111,31 @@ def build_menu(items, title=""):
             title=title,
             quit_keys=("q", "ctrl-g"),
             show_shortcut_hints=True,
+            menu_cursor_style=("fg_red", "bold"),
+            menu_highlight_style=("standout",),
+            shortcut_key_highlight_style=("fg_blue",),
         )
         return menu
     except FileNotFoundError:
         return _FallbackMenu(items, title)
+
+
+def build_categorized_menu(categories):
+    """Builds a TerminalMenu with categorized sections using the title.
+
+    categories: dict mapping section header -> list of item strings.
+    Returns (menu, flat_items) where flat_items is the concatenated
+    list of all items and menu is the TerminalMenu instance.
+    """
+    flat_items = []
+    title_lines = []
+    for header, items in categories.items():
+        title_lines.append(header)
+        flat_items.extend(items)
+        title_lines.append("")
+    title = "\n".join(title_lines)
+    menu = build_menu(flat_items, title=title)
+    return menu, flat_items
 
 
 def clear_terminal_full():
@@ -1142,47 +1163,55 @@ def main():
         while True:
             show_main_dashboard(engine)
 
-            menu_items = [
-                "View History",
-                "Months at a glance",
-                "Plot Total Money",
-                "Simulate the future",
-                "Import Statements",
-                "Change Master Password",
-                "Delete Data",
-                "Exit"
-            ]
-            terminal_menu = build_menu(
-                menu_items,
-                title="\nWhat would you like to do?",
-            )
+            categories = {
+                "📊  View & Analysis": [
+                    "View History",
+                    "Months at a glance",
+                    "Plot Total Money",
+                    "Simulate the future",
+                ],
+                "💾  Data Management": [
+                    "Import Statements",
+                    "Delete Data",
+                ],
+                "🔐  Account": [
+                    "Change Master Password",
+                ],
+                "🚪  System": [
+                    "Exit",
+                ],
+            }
+            terminal_menu, flat_items = build_categorized_menu(categories)
             menu_index = terminal_menu.show()
 
-            if menu_index == 0:
+            if menu_index is None:
+                continue
+
+            if flat_items[menu_index] == "View History":
                 clear_terminal_full()
                 show_history_view(engine)
-            elif menu_index == 1:
+            elif flat_items[menu_index] == "Months at a glance":
                 clear_terminal_full()
                 show_monthly_overview(engine)
-            elif menu_index == 2:
+            elif flat_items[menu_index] == "Plot Total Money":
                 clear_terminal_full()
                 show_plot_view(engine)
-            elif menu_index == 3:
+            elif flat_items[menu_index] == "Simulate the future":
                 clear_terminal_full()
                 show_prediction_view(engine)
-            elif menu_index == 4:
+            elif flat_items[menu_index] == "Import Statements":
                 clear_terminal_full()
                 run_importer(engine)
-            elif menu_index == 5:
+            elif flat_items[menu_index] == "Change Master Password":
                 clear_terminal_full()
                 show_change_password_view(engine)
-            elif menu_index == 6:
+            elif flat_items[menu_index] == "Delete Data":
                 clear_terminal_full()
                 result = show_delete_data_view(engine)
                 if result == "reset_exit":
                     clear_terminal_full()
                     break
-            elif menu_index == 7:
+            elif flat_items[menu_index] == "Exit":
                 clear_terminal_full()
                 break
 
