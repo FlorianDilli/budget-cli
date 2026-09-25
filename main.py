@@ -981,21 +981,18 @@ def show_prediction_view(engine: BudgetEngine):
         console.print(f"Current balance: {current_balance_text}")
     else:
         depletion_month = prediction['depletion_month']
-        safe_runway = prediction['safe_runway_months']
         risk_pct = prediction['depletion_risk_pct']
 
         console.print(Panel(
-            f"[danger]⚠ Depletion likely[/danger]\n\n"
-            f"in {depletion_month}\n\n"
-            f"Your balance reaches zero in about {safe_runway} months in many simulated futures.\n\n"
-            f"[text_muted]{prediction['detail']}[/text_muted]",
+            f"[danger]⚠ Depletion likely in {depletion_month}[/danger]\n\n"
+            f"[text_muted]{prediction['detail']}[/text_muted]\n\n"
+            f"Likelihood of this prediction: [danger]{risk_pct}%[/danger]\n"
+            f"Current balance: {current_balance_text}",
             title="[bold heading]Prediction Result[/bold heading]",
             border_style="danger",
             expand=False,
             padding=(1, 2)
         ))
-        console.print(f"Likelihood of this prediction: [danger]{risk_pct}%[/danger]")
-        console.print(f"Current balance: {current_balance_text}")
 
     Prompt.ask("\n[ Back to Main Menu ]")
 

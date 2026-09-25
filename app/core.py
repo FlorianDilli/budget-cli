@@ -1786,7 +1786,7 @@ class BudgetEngine:
             p_depletion = sum(1 for t in tau if t <= m_star) / mc_runs
 
             depletion_info = months_info[m_star - 1]
-            depletion_month_str = f"{depletion_info['year']}-{depletion_info['month']:02d}"
+            depletion_month_str = f"{calendar.month_name[depletion_info['month']]} {depletion_info['year']}"
 
             if m_star > 1:
                 safe_info = months_info[m_star - 2]
@@ -1802,5 +1802,5 @@ class BudgetEngine:
                 "last_safe_month": last_safe_month_str,
                 "safe_runway_months": safe_runway,
                 "depletion_risk_pct": round(p_depletion * 100, 1),
-                "detail": f"Account reaches zero in or before {depletion_month_str} with {round(p_depletion*100, 1)}% probability. Safe runway is {safe_runway} months."
+                "detail": f"Depletion risk is {round(p_depletion*100, 1)}%."
             }
