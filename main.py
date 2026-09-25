@@ -756,7 +756,7 @@ def show_monthly_overview(engine: BudgetEngine):
         recent_average = recent_total / len(recent_summaries)
         recent_average_text = format_amount(recent_average, currency, None, round_amounts)
         insights_grid.add_row(
-            f"Average total per month (last {len(recent_summaries)} finished month{'' if len(recent_summaries) == 1 else 's'}):",
+            f"Average total in the last 3 finished months:",
             recent_average_text,
         )
 
@@ -764,7 +764,7 @@ def show_monthly_overview(engine: BudgetEngine):
         average_per_month = total_of_finished / len(finished_summaries)
         average_text = format_amount(average_per_month, currency, None, round_amounts)
         insights_grid.add_row(
-            f"Average total per month (all {len(finished_summaries)} finished month{'' if len(finished_summaries) == 1 else 's'}):",
+            f"Average total of all {len(finished_summaries)} finished months:",
             average_text,
         )
         console.print(Panel(
