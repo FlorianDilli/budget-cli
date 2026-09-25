@@ -116,20 +116,25 @@ def build_menu(items, title=""):
             shortcut_key_highlight_style=("fg_blue",),
         )
         return menu
-    except FileNotFoundError:
+    except (FileNotFoundError, NotImplementedError, OSError):
         return _FallbackMenu(items, title)
 
 
 def build_categorized_menu(categories):
     """Builds a TerminalMenu with categorized sections using the title.
 
-    categories: dict mapping section header -> list of item strings.
+    categories: dict mapping section header -> list of item strings,
+    or an iterable of (header, items) pairs.
     Returns (menu, flat_items) where flat_items is the concatenated
     list of all items and menu is the TerminalMenu instance.
     """
     flat_items = []
     title_lines = []
-    for header, items in categories.items():
+    if isinstance(categories, dict):
+        iterator = categories.items()
+    else:
+        iterator = categories
+    for header, items in iterator:
         title_lines.append(header)
         flat_items.extend(items)
         title_lines.append("")
@@ -1190,25 +1195,25 @@ def main():
         while True:
             show_main_dashboard(engine)
 
-            categories = {
-                "📊  View & Analysis": [
+            categories = [
+                ("📊  View & Analysis", [
                     "View History",
                     "Months at a glance",
                     "Budget Forecast",
                     "Plot Total Money",
                     "Simulate the future",
-                ],
-                "💾  Data Management": [
+                ]),
+                ("💾  Data Management", [
                     "Import Statements",
                     "Delete Data",
-                ],
-                "🔐  Account": [
+                ]),
+                ("🔐  Account", [
                     "Change Master Password",
-                ],
-                "🚪  System": [
+                ]),
+                ("🚪  System", [
                     "Exit",
-                ],
-            }
+                ]),
+            ]
             terminal_menu, flat_items = build_categorized_menu(categories)
             menu_index = terminal_menu.show()
 
