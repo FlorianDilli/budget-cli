@@ -1,6 +1,6 @@
 import { parseToml, findTableLines } from './toml';
 import { numberToCents, type Cents } from './money';
-import { parseIsoDate, type IsoDate } from './dates';
+import { parseFinancialDate, parseIsoDate, type IsoDate } from './dates';
 
 export interface ValidationIssue {
   line: number;
@@ -223,8 +223,8 @@ export function parseFinancials(text: string): Parsed<Financials> {
       else {
         raw.amount_history.forEach((h, hi) => {
           if (!table(h)) return fail(`amount_history[${hi + 1}] must be a table`);
-          const from = parseIsoDate(h.from);
-          if (!from) return fail(`amount_history[${hi + 1}].from must be YYYY-MM-DD`);
+          const from = parseFinancialDate(h.from);
+          if (!from) return fail(`amount_history[${hi + 1}].from must be YYYY-MM-DD or YYYY-MM-start/end`);
           if (typeof h.amount !== 'number') return fail(`amount_history[${hi + 1}].amount must be a number`);
           try {
             history.push({ from, cents: numberToCents(h.amount) });
@@ -255,13 +255,13 @@ export function parseFinancials(text: string): Parsed<Financials> {
     let start: IsoDate | undefined;
     let end: IsoDate | undefined;
     if (raw.start_date !== undefined) {
-      const d = parseIsoDate(raw.start_date);
-      if (!d) fail('start_date must be YYYY-MM-DD');
+      const d = parseFinancialDate(raw.start_date);
+      if (!d) fail('start_date must be YYYY-MM-DD or YYYY-MM-start/end');
       else start = d;
     }
     if (raw.end_date !== undefined) {
-      const d = parseIsoDate(raw.end_date);
-      if (!d) fail('end_date must be YYYY-MM-DD');
+      const d = parseFinancialDate(raw.end_date);
+      if (!d) fail('end_date must be YYYY-MM-DD or YYYY-MM-start/end');
       else end = d;
     }
     if (start && end && end < start) fail('end_date is before start_date');
@@ -289,8 +289,8 @@ export function parseFinancials(text: string): Parsed<Financials> {
   const cashLine = lineOf(text, 'cash');
   cashEntries.forEach((e, i) => {
     if (!table(e)) return issues.push({ line: cashLine, message: `Cash entry ${i + 1}: must be a table` });
-    const date = parseIsoDate(e.date);
-    if (!date) return issues.push({ line: cashLine, message: `Cash entry ${i + 1}: date must be YYYY-MM-DD` });
+    const date = parseFinancialDate(e.date);
+    if (!date) return issues.push({ line: cashLine, message: `Cash entry ${i + 1}: date must be YYYY-MM-DD or YYYY-MM-start/end` });
     if (typeof e.amount !== 'number') return issues.push({ line: cashLine, message: `Cash entry ${i + 1} (${date}): amount must be a number` });
     try {
       out.cash.push({ date, cents: numberToCents(e.amount) });

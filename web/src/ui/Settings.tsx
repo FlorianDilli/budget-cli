@@ -23,12 +23,12 @@ export function Settings() {
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'editor';
   const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
   return (
-    <div className="page">
+    <div className="page settings-page">
       <header className="page-head">
         <h1>Settings</h1>
         <nav className="subtabs" aria-label="Settings sections">
           {TABS.map((t) => (
-            <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
+            <button key={t} type="button" className={t === tab ? 'active' : ''} aria-pressed={t === tab} onClick={() => setTab(t)}>
               {t === 'editor' ? 'Editor' : t === 'budget' ? 'Visual Budget' : 'Data'}
             </button>
           ))}
@@ -49,7 +49,7 @@ function EditorTab({ jump }: { jump: { line: number } | null }) {
   useEffect(() => { if (jump) setView('financials'); }, [jump]);
   if (!snapshot) return null;
   return (
-    <>
+    <div className="editor-studio">
       {isSample && <p className="warn">Sample content is shown as a draft. It is not saved until you press Save.</p>}
       <div className="editor-view toolbar" role="group" aria-label="Editor layout">
         {(['split', 'settings', 'financials'] as const).map((mode) => <button type="button" key={mode} className={view === mode ? 'active' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === 'split' ? 'Split view' : `${mode}.toml`}</button>)}
@@ -78,7 +78,7 @@ function EditorTab({ jump }: { jump: { line: number } | null }) {
         />
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -139,8 +139,7 @@ function EditorPane<T>({
   };
 
   const download = () => {
-    const text = isSample ? draft : savedText;
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const url = URL.createObjectURL(new Blob([draft], { type: 'text/plain;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName;
@@ -178,21 +177,21 @@ function EditorPane<T>({
         </span>
       </header>
 
-      <div className="toolbar">
-        {SYMBOLS.map((s) => (
-          <button key={s} type="button" className="sym" onClick={() => ref.current?.insert(s === 'Tab' ? '\t' : s)}>{s}</button>
-        ))}
-      </div>
-      <div className="toolbar">
+      <div className="toolbar editor-actions" role="group" aria-label={`${fileName} actions`}>
         <button type="button" onClick={() => ref.current?.undo()}>Undo</button>
         <button type="button" onClick={() => ref.current?.redo()}>Redo</button>
         <button type="button" onClick={() => ref.current?.search()}>Search</button>
         <label className="check"><input type="checkbox" checked={wrap} onChange={(e) => setWrap(e.target.checked)} /> Wrap</label>
         <button type="button" onClick={() => fileInput.current?.click()}>Open</button>
         <input ref={fileInput} type="file" accept=".toml,text/plain" hidden onChange={onPick} aria-label={`Open ${fileName}`} />
-        <button type="button" onClick={download}>Download</button>
+        <button type="button" className="download-button" onClick={download} title="Download the displayed draft as a plaintext TOML file">Download</button>
+      </div>
+      <div className="toolbar editor-symbols" role="group" aria-label={`${fileName} quick actions`}>
+        <button type="button" onClick={() => { setDraft(''); setIssues([]); }}>Clear</button>
         <button type="button" onClick={() => navigator.clipboard?.writeText(draft)}>Copy</button>
-        <button type="button" onClick={() => setDraft('')}>Clear</button>
+        {SYMBOLS.map((s) => (
+          <button key={s} type="button" className="sym" aria-label={s === 'Tab' ? 'Insert tab' : `Insert ${s}`} onClick={() => ref.current?.insert(s === 'Tab' ? '\t' : s)}>{s}</button>
+        ))}
       </div>
 
       {firstIssue && (
@@ -212,7 +211,8 @@ function EditorPane<T>({
       <footer className="pane-foot">
         <button type="button" className="primary" onClick={save} disabled={!dirty || !live.ok}>Save</button>
         <button type="button" onClick={discard} disabled={!dirty}>Discard changes</button>
-        {notice && <span className="muted">{notice}</span>}
+        <span className="editor-stats">{draft.split('\n').length} {draft.split('\n').length === 1 ? 'line' : 'lines'} · {live.ok ? 'Valid' : 'Needs attention'}</span>
+        {notice && <span className="muted" role="status">{notice}</span>}
       </footer>
     </section>
   );

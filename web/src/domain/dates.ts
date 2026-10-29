@@ -26,6 +26,20 @@ export function parseIsoDate(value: unknown): IsoDate | null {
   return null;
 }
 
+/** Financial dates also support explicit first/last day of a month. */
+export function parseFinancialDate(value: unknown): IsoDate | null {
+  if (typeof value === 'string') {
+    const match = /^(\d{4})-(\d{2})-(start|end)$/i.exec(value.trim());
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      if (month < 1 || month > 12) return null;
+      return formatIso(year, month, match[3].toLowerCase() === 'start' ? 1 : daysInMonth(year, month));
+    }
+  }
+  return parseIsoDate(value);
+}
+
 export function daysInMonth(year: number, month: number): number {
   if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
   return [4, 6, 9, 11].includes(month) ? 30 : 31;

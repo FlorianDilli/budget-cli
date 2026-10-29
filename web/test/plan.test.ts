@@ -10,6 +10,12 @@ function entry(toml: string): RecurringEntry {
 
 // Decision 19 fixtures: expected values are written from the decision, not from Python output.
 describe('Decision 19 month-level activity', () => {
+  it('uses normalized month-boundary dates for activity', () => {
+    const e = entry('[[recurring_transactions]]\namount=-30\nstart_date="2024-02-start"\nend_date="2024-02-end"\n');
+    expect(planLineForMonth(e, '2024-01').active).toBe(false);
+    expect(planLineForMonth(e, '2024-02').active).toBe(true);
+    expect(planLineForMonth(e, '2024-03').active).toBe(false);
+  });
   it('counts an entry in the month where it starts, not the month before', () => {
     const e = entry('[[recurring_transactions]]\ndescription="Gym"\namount=-30\nstart_date="2025-03-15"\n');
     expect(planLineForMonth(e, '2025-02').active).toBe(false);

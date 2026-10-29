@@ -272,3 +272,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .plan-item { gap: .4rem; }
   .plan-item-right { flex-wrap: wrap; justify-content: end; }
 }
+
+/* Editor studio: compact controls and a continuous code canvas. */
+.settings-page > div { min-width: 0; }
+.settings-page .subtabs, .editor-view { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+.settings-page .subtabs button, .editor-view button { border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.settings-page .subtabs button.active, .editor-view button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.editor-studio { display: flex; flex-direction: column; gap: .7rem; }
+.editor-studio > .warn { margin: 0; }
+.editor-view { align-self: flex-start; margin: 0; }
+.editor-grid { gap: .75rem; }
+.editor-grid > div { min-width: 0; }
+.editor-grid .pane { gap: 0; padding: 0; overflow: hidden; border-radius: 10px; }
+.pane-head { min-height: 52px; padding: .65rem .8rem; border-bottom: 1px solid var(--border); }
+.pane-head h2 { padding: .3rem .55rem; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; font-size: .78rem; }
+.state { font-size: .7rem; font-weight: 700; }
+.editor-actions { padding: .5rem .75rem; border-bottom: 1px solid var(--border); }
+.editor-actions button, .editor-actions label, .pane-foot button { font-size: .75rem; font-weight: 700; }
+.editor-actions button, .pane-foot button { border-radius: 999px; }
+.editor-actions .download-button { background: var(--accent); border-color: #8fdc2b; color: #11140e; }
+.editor-symbols { flex-wrap: nowrap; overflow-x: auto; padding: .45rem .75rem; background: var(--bg); border-bottom: 1px solid var(--border); }
+.editor-symbols button { flex: 0 0 auto; font-size: .75rem; font-weight: 700; padding: .25rem .5rem; border-radius: 6px; }
+.editor-symbols .sym { min-width: 1.9rem; }
+.editor-grid .toml-editor { flex: 1; border: 0; border-radius: 0; background: var(--surface); }
+.editor-grid .toml-editor .cm-editor { height: 100%; min-height: 420px; max-height: 70vh; font-size: 13.5px; line-height: 1.65; }
+.editor-grid .cm-gutters { background: var(--bg); color: var(--muted); }
+.editor-grid .cm-activeLine { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.editor-grid .error-banner { border-radius: 0; }
+.editor-grid .errors { margin: .5rem 1rem; }
+.pane-foot { padding: .55rem .75rem; background: var(--bg); border-top: 1px solid var(--border); font-size: .75rem; }
+.editor-stats { margin-left: auto; color: var(--muted); font-weight: 600; white-space: nowrap; }
+@media (max-width: 599px) {
+  .settings-page .page-head { align-items: flex-start; }
+  .editor-view { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .editor-view button { white-space: nowrap; }
+  .editor-actions { gap: .3rem; }
+  .editor-grid .toml-editor .cm-editor { min-height: 320px; }
+  .editor-stats { margin-left: 0; }
+}
