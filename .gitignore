@@ -1,0 +1,22 @@
+# Personal financial data (public repository: never commit)
+userdata/
+statements/
+*.budget
+*.salt
+*.csv
+settings.toml
+financials.toml
+!web/test/fixtures/**
+
+# Python
+__pycache__/
+*.pyc
+
+# Web app
+web/node_modules/
+web/dist/
+
+# Editor / OS
+.DS_Store
+.kilo/kilo.json
+.kilo/node_modules/
