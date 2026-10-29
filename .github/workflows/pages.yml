@@ -2,7 +2,7 @@ name: Build, test, and deploy web app
 
 on:
   push:
-    branches: [main, budget-web]
+    branches: [main, budget-web, budget-web-fresh]
   pull_request:
   workflow_dispatch:
 
@@ -37,12 +37,12 @@ jobs:
             echo "Forbidden figures found in dist/"; exit 1
           fi
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/budget-web'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/budget-web' || github.ref == 'refs/heads/budget-web-fresh'
         with:
           path: web/dist
 
   deploy:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/budget-web'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/budget-web' || github.ref == 'refs/heads/budget-web-fresh'
     needs: build
     runs-on: ubuntu-latest
     permissions:
