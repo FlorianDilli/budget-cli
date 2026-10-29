@@ -2,8 +2,8 @@ import { useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormE
 import { useSearchParams } from 'react-router-dom';
 import { useSession, type SaveResult } from '../state/session';
 import { TomlEditor, type TomlEditorHandle } from './TomlEditor';
-import { parseSettings, parseFinancials, type ValidationIssue, type Parsed } from '../domain/config';
-import { SAMPLE_FINANCIALS, SAMPLE_SETTINGS } from '../domain/sample';
+import { parseSettings, type ValidationIssue, type Parsed } from '../domain/config';
+import { SAMPLE_SETTINGS } from '../domain/sample';
 import { currentMonth, type YearMonth } from '../domain/dates';
 import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
@@ -40,16 +40,11 @@ export function Settings() {
 
 function EditorTab() {
   const { snapshot, isSample } = useSession();
-  const [view, setView] = useState<'split' | 'settings' | 'financials'>('split');
   if (!snapshot) return null;
   return (
     <div className="editor-studio">
       {isSample && <p className="warn">Sample content is shown as a draft. It is not saved until you press Save.</p>}
-      <div className="editor-view toolbar" role="group" aria-label="Editor layout">
-        {(['split', 'settings', 'financials'] as const).map((mode) => <button type="button" key={mode} className={view === mode ? 'active' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === 'split' ? 'Split view' : `${mode}.toml`}</button>)}
-      </div>
-      <div className={`editor-grid ${view !== 'split' ? 'single' : ''}`}>
-        <div hidden={view === 'financials'}>
+      <div className="editor-grid single">
         <EditorPane
           kind="settings"
           fileName="settings.toml"
@@ -58,17 +53,6 @@ function EditorTab() {
           isSample={isSample}
           parse={parseSettings}
         />
-        </div>
-        <div hidden={view === 'settings'}>
-        <EditorPane
-          kind="financials"
-          fileName="financials.toml"
-          savedText={snapshot.financialsToml}
-          sample={SAMPLE_FINANCIALS}
-          isSample={isSample}
-          parse={parseFinancials}
-        />
-        </div>
       </div>
     </div>
   );
@@ -84,7 +68,7 @@ function EditorPane<T>({
   isSample,
   parse,
 }: {
-  kind: 'settings' | 'financials';
+  kind: 'settings';
   fileName: string;
   savedText: string;
   sample: string;
@@ -108,8 +92,7 @@ function EditorPane<T>({
 
   const save = async () => {
     setNotice(null);
-    const fn = kind === 'settings' ? session.saveSettings : session.saveFinancials;
-    const res: SaveResult = await fn(draft);
+    const res: SaveResult = await session.saveSettings(draft);
     if (!res.ok) {
       setIssues(res.issues);
       setNotice('Not saved. The last valid version stays active.');

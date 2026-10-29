@@ -69,7 +69,7 @@ export function BudgetPage() {
     URL.revokeObjectURL(url);
   };
 
-  return <section className="budget-studio" onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
+  return <section className={`budget-studio${view === 'budget' ? ' is-budget' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
     <header className="studio-header">
       <span className="studio-filename">financials.toml</span>
       <nav className="studio-tabs" aria-label="Budget view">
