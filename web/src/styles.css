@@ -341,3 +341,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .editor-grid .toml-editor .cm-editor { min-height: 320px; }
   .editor-stats { margin-left: 0; }
 }
+
+/* Mobile-first bottom tab bar and overflow guards */
+.shell { grid-template-columns: minmax(0, 1fr); }
+.content, .page, .grid-2 { min-width: 0; max-width: 100%; }
+.page-head > * { min-width: 0; }
+.month-select select, select { max-width: 100%; min-width: 0; }
+.nav { height: 4.25rem; padding: 0 .25rem env(safe-area-inset-bottom, 0px); align-items: stretch; gap: 0; background: var(--surface); box-shadow: 0 -4px 14px rgba(0, 0, 0, .25); }
+.nav a { flex: 1 1 0; min-width: 0; justify-content: center; gap: .2rem; padding: .45rem .15rem .4rem; font-size: .68rem; font-weight: 700; line-height: 1.1; letter-spacing: .01em; color: var(--muted); border-radius: 0; border-top: 3px solid transparent; }
+.nav a > span:first-child { font-size: 1.2rem; line-height: 1; }
+.nav a > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav a:hover { border-color: transparent; color: var(--text); }
+.nav a.active { color: var(--text); background: transparent; border-top-color: var(--accent); border-radius: 0; }
+@media (min-width: 900px) {
+  .nav { height: auto; padding: .75rem; gap: .3rem; }
+  .nav a { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; font-size: .95rem; padding: .6rem 1rem; border-top: 0; border-left: 3px solid transparent; border-radius: 10px; }
+  .nav a > span:first-child { font-size: 1rem; }
+  .nav a.active { border-left-color: var(--accent); border-top-color: transparent; }
+}
