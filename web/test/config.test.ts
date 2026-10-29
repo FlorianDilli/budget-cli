@@ -23,7 +23,7 @@ describe('settings.toml', () => {
     }
   });
   it('reports TOML syntax errors with line numbers', () => {
-    const r = parseSettings('[user]\ncurrency_symbol = =\n');
+    const r = parseSettings('[user]\ncurrency_symbol = = 1\n');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.issues[0].line).toBe(2);
   });
@@ -83,8 +83,10 @@ entries = [{ date = "2025-02-end", amount = 5 }]
   it.each(['2024-00-start', '2024-13-end', '2024-2-start', '2024-02-middle'])('rejects invalid financial date %s', (date) => {
     expect(parseFinancials(`[[recurring_transactions]]\namount=1\nstart_date="${date}"`).ok).toBe(false);
   });
-  it('still rejects unquoted month boundary dates as invalid TOML', () => {
-    expect(parseFinancials('[[recurring_transactions]]\namount=1\nstart_date=2024-02-start').ok).toBe(false);
+  it('accepts unquoted month boundary dates via the reference-compatible fallback', () => {
+    const r = parseFinancials('[[recurring_transactions]]\namount=1\nstart_date=2024-02-start');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.recurring[0].start).toBe('2024-02-01');
   });
   it('reports the actual quoted recurring header after misleading string content', () => {
     const text = `note = """

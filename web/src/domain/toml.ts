@@ -1,15 +1,22 @@
 import { parse } from 'smol-toml';
+import { parseTomlCompat } from './toml-compat';
 
 export type TomlResult =
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; line: number; col: number; message: string };
 
-/** Parses TOML 1.0 text. Errors carry the 1-based line and column. */
+/**
+ * Parses TOML text. Strict TOML 1.0 (smol-toml) is tried first; the lenient
+ * reference-compatible parser is used only when smol-toml rejects the text.
+ * If both reject it, the smol-toml error is reported.
+ */
 export function parseToml(text: string): TomlResult {
   try {
     return { ok: true, value: parse(text) as Record<string, unknown> };
   } catch (err) {
     const e = err as { line?: number; column?: number; col?: number; message?: string };
+    const compat = parseTomlCompat(text);
+    if (compat.ok) return compat;
     const message = (e.message ?? 'Invalid TOML').split('\n')[0];
     return {
       ok: false,
@@ -17,6 +24,17 @@ export function parseToml(text: string): TomlResult {
       col: e.column ?? e.col ?? 1,
       message,
     };
+  }
+}
+
+/** Parses one table header line: strict TOML first, then the compat parser. */
+function parseHeaderLine(line: string): unknown {
+  try {
+    return parse(line);
+  } catch (err) {
+    const compat = parseTomlCompat(line);
+    if (compat.ok) return compat.value;
+    throw err;
   }
 }
 
@@ -28,7 +46,7 @@ export function findTableLines(text: string, name: string): number[] {
   text.split('\n').forEach((line, i) => {
     if (!quote && depth === 0 && /^[ \t]*\[/.test(line)) {
       try {
-        let node: unknown = parse(line);
+        let node: unknown = parseHeaderLine(line);
         const path: string[] = [];
         while (node && typeof node === 'object' && !Array.isArray(node)) {
           const keys = Object.keys(node);
