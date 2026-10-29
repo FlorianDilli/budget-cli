@@ -51,7 +51,7 @@ function Shell() {
         ))}
       </nav>
       <main className="content">
-        {isSample && <p className="warn">Sample data: open Settings → Editor and press Save to keep it.</p>}
+        {isSample && <p className="warn">Sample data: save the budget or Settings editor to keep it.</p>}
         {error && (
           <p className="error" role="alert">
             {error} <button onClick={() => setError(null)}>Dismiss</button>
