@@ -33,6 +33,7 @@ it('shows the saved plan, changes months and sort, and jumps to the saved source
     const months = container.querySelectorAll<HTMLButtonElement>('.month-strip button');
     await act(async () => months[0].click());
     expect(months[0].getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.budget .card h2')?.textContent).toContain('Jan');
     const sort = Array.from(container.querySelectorAll('select')).find((el) => el.value === 'amount')!;
     await act(async () => { sort.value = 'category'; sort.dispatchEvent(new Event('change', { bubbles: true })); });
     expect(container.querySelector('.category-heading')).not.toBeNull();

@@ -11,6 +11,7 @@ import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
 import { Card, Money, MonthSelect, currencyOf, dataMonths } from './common';
 import { MIN_PASSWORD_LENGTH } from '../state/session';
+import { CashFlow } from './CashFlow';
 
 const TABS = ['editor', 'budget', 'data'] as const;
 type Tab = (typeof TABS)[number];
@@ -259,7 +260,7 @@ function BudgetTab({ onJump }: { onJump: (line: number) => void }) {
         <Kpi label="Net budget" value={<Money cents={net} currency={cur} />} sub={net >= 0 ? 'Surplus' : 'Deficit'} />
         <Kpi label="Savings rate" value={incomeSum > 0 ? `${(net / incomeSum * 100).toFixed(1)}%` : '—'} sub={incomeSum > 0 ? 'of income' : 'No income'} />
       </div>
-      <CashFlow income={incomeSum} expense={expenseSum} currency={cur} month={ym} />
+      <CashFlow plan={plan} currency={cur} month={ym} />
       <details className="budget-changes"><summary><span>Changes vs. {monthLabel(addMonths(ym, -1))}</span><span className="change-toggle"><span className="expand-label">Expand</span><span className="collapse-label">Collapse</span> ▾</span></summary>
         {changes.length ? <div className="change-list">{changes.map(({ line, before }) => <div key={line.entry.index}><span>{lineName(line)}</span><span><span className="muted">{centsToDecimal(before)} → </span><Money cents={line.monthlyCents} currency={cur} /></span></div>)}</div> : <p className="muted">No changes to the monthly plan.</p>}
       </details>
@@ -279,14 +280,6 @@ function lineName(line: PlanLine) { return line.entry.intuitiveName || line.entr
 function PlanList({ title, lines, currency, grouped, canJump, onJump }: { title: string; lines: PlanLine[]; currency: string; grouped: boolean; canJump: boolean; onJump: (line: number) => void }) {
   const groups = grouped ? Array.from(new Set(lines.map((line) => line.entry.category || 'General'))).map((category) => ({ category, lines: lines.filter((line) => (line.entry.category || 'General') === category) })) : [{ category: '', lines }];
   return <section className={`budget-list ${title === 'Income' ? 'income-list' : 'expense-list'}`}><header><h2>{title}</h2><strong><Money cents={lines.reduce((sum, line) => sum + line.monthlyCents, 0)} currency={currency} /></strong></header>{lines.length === 0 ? <p className="muted budget-empty">No planned {title.toLowerCase()} this month.</p> : <div className="plan-list">{groups.map((group) => <div key={group.category}>{grouped && <div className="category-heading"><span>{group.category}</span><Money cents={group.lines.reduce((sum, line) => sum + line.monthlyCents, 0)} currency={currency} /></div>}{group.lines.map((line) => <div className="plan-item" key={line.entry.index}><div><strong>{lineName(line)}</strong><span><span className="category-badge">{line.entry.category || 'General'}</span> {line.entry.recurrence === 1 ? 'Monthly' : line.isDue ? `Due this month (${centsToDecimal(line.priceCents ?? 0)} ${currency})` : `Every ${line.entry.recurrence} months`}</span></div><div className="plan-item-right"><strong><Money cents={line.monthlyCents} currency={currency} /><small> /mo</small></strong><button type="button" disabled={!canJump || line.entry.line < 1} onClick={() => onJump(line.entry.line)} aria-label={`Jump to ${lineName(line)} in financials.toml`}>L{line.entry.line}</button></div></div>)}</div>)}</div>}</section>;
-}
-
-function CashFlow({ income, expense, currency, month }: { income: Cents; expense: Cents; currency: string; month: YearMonth }) {
-  const out = Math.abs(expense);
-  const flow = Math.max(income, out);
-  const incomeHeight = flow ? income / flow * 110 : 0;
-  const expenseHeight = flow ? out / flow * 110 : 0;
-  return <Card title={`Cashflow (${monthLabel(month)})`}><p className="muted small">Monthly planned income, expenses and {income >= out ? 'surplus' : 'deficit'}.</p>{flow === 0 ? <p className="muted">No planned cash flow for this month.</p> : <div className="flow"><div><span>Income</span><strong><Money cents={income} currency={currency} /></strong></div><svg viewBox="0 0 400 140" role="img" aria-label={`Income ${centsToDecimal(income)}, expenses ${centsToDecimal(out)}, net ${centsToDecimal(income - out)} ${currency}`}><path className="flow-income" d={`M 0 15 L 0 ${15 + incomeHeight} C 130 ${15 + incomeHeight} 130 ${15 + incomeHeight} 200 ${15 + incomeHeight} L 200 15 Z`} /><path className="flow-expense" d={`M 200 15 L 200 ${15 + expenseHeight} C 270 ${15 + expenseHeight} 270 ${15 + expenseHeight} 400 ${15 + expenseHeight} L 400 15 Z`} /><rect x="195" y="15" width="10" height="110" rx="5" className="flow-node" /></svg><div><span>Expenses</span><strong><Money cents={expense} currency={currency} /></strong><span>{income >= out ? 'Surplus' : 'Deficit'} <Money cents={income - out} currency={currency} /></span></div></div>}</Card>;
 }
 
 function Kpi({ label, value, sub }: { label: string; value: ReactNode; sub: ReactNode }) {

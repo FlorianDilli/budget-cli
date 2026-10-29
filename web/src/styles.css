@@ -201,14 +201,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .plan-item > div span { color: var(--muted); font-size: .75rem; }
 .plan-item > strong { white-space: nowrap; font-family: var(--mono); font-size: .82rem; }
 .plan-item small { color: var(--muted); font-weight: 400; }
-.flow { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(100px, 3fr) minmax(90px, 1fr); gap: .5rem; align-items: center; }
-.flow > div { display: flex; flex-direction: column; gap: .3rem; font-size: .75rem; }
-.flow > div:last-child { text-align: right; }
-.flow > div span { color: var(--muted); }
-.flow svg { width: 100%; max-height: 180px; }
-.flow-income { fill: #a9df72; opacity: .7; }
-.flow-expense { fill: #e89486; opacity: .65; }
-.flow-node { fill: #697c58; }
+.sankey-scroll { overflow-x: auto; max-width: 100%; }
+.sankey-scroll:focus-visible { outline: 2px solid #83bd31; outline-offset: 2px; }
+.sankey { display: block; width: 100%; min-width: 700px; height: auto; }
+.sankey text { fill: var(--text); font-size: 11px; font-weight: 700; }
+.sankey text.sankey-value { fill: var(--muted); font-size: 10px; font-weight: 600; }
+.sankey-ribbon { opacity: .35; }
+.sankey-ribbon:hover { opacity: .65; }
+.sankey-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+.sankey-summary ul { margin: .3rem 0 0; padding-left: 1.1rem; }
 @media (min-width: 900px) {
   .month-strip { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .nav { padding: .75rem; gap: .3rem; }
@@ -220,8 +221,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .nav a.active { border-radius: 0; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-value { font-size: 1.1rem; overflow-wrap: anywhere; }
-  .flow { grid-template-columns: minmax(65px, 1fr) minmax(70px, 2fr) minmax(65px, 1fr); }
-  .flow > div { overflow-wrap: anywhere; }
+  .sankey-summary { grid-template-columns: 1fr; }
 }
 
 /* Visual budget inspector */
