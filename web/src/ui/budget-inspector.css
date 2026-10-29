@@ -8,6 +8,7 @@
   --bi-faint: #8e9587;
   --bi-green: #166534;
   --bi-red: #b91c1c;
+  --bi-amber: #b45309;
   --bi-mono: 'JetBrains Mono', SFMono-Regular, Menlo, monospace;
   display: flex;
   flex-direction: column;
@@ -45,10 +46,11 @@
 .bi-net { background: #f1fcdb; border-color: #8fdc2b; }
 .bi-net.negative { background: #feecee; border-color: #fca5a5; }
 .bi-flow { padding: 12px 14px; }
-.bi-flow-scroll { overflow-x: auto; }
-.bi-flow svg { display: block; width: 100%; min-width: 560px; max-width: 960px; height: auto; margin: auto; }
-.bi-flow text { fill: var(--bi-text); font: 700 12px 'Plus Jakarta Sans', sans-serif; }
-.bi-flow text.bi-flow-value { fill: var(--bi-muted); font: 11px var(--bi-mono); }
+.bi-flow-scroll { width: 100%; overflow: hidden; display: flex; justify-content: center; }
+.bi-flow svg { display: block; width: 100%; max-width: 960px; height: auto; }
+.bi-flow text { fill: var(--bi-text); font-family: 'Plus Jakarta Sans', sans-serif; }
+.bi-flow text.bi-flow-name { font-size: 13px; font-weight: 700; }
+.bi-flow text.bi-flow-value { fill: var(--bi-muted); font: 600 11.5px var(--bi-mono); }
 .bi-flow-note { margin: 2px 0 0; color: var(--bi-faint); font-size: .7rem; }
 .bi-diff { padding: 10px 14px; background: var(--bi-subtle); border: 1px solid #c4ccbe; border-radius: 10px; }
 .bi-diff[open] { background: var(--bi-surface); border-color: var(--bi-border); }
@@ -59,10 +61,16 @@
 .bi-toggle { padding: 5px 8px; border: 1px solid #8fdc2b; border-radius: 999px; background: #f1fcdb; color: #166534; font-size: .65rem; white-space: nowrap; }
 .bi-collapse, .bi-diff[open] .bi-expand { display: none; }
 .bi-diff[open] .bi-collapse { display: inline; }
-.bi-diff-group h4 { margin: 10px 0 3px; color: var(--bi-muted); font-size: .72rem; text-transform: uppercase; }
+.bi-diff-group h4 { margin: 10px 0 3px; color: var(--bi-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.bi-diff-new { color: var(--bi-green) !important; }
+.bi-diff-changed { color: var(--bi-amber) !important; }
+.bi-diff-removed { color: var(--bi-red) !important; }
+.bi-change-values { display: inline-flex; align-items: center; gap: 6px; }
+.bi-change-delta { color: var(--bi-amber); font-family: var(--bi-mono); font-size: .72rem; }
+.bi-amount-removed { opacity: .5; text-decoration: line-through; }
+.bi-change del { text-decoration: line-through; }
 .bi-change { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--bi-border); font-size: .8rem; }
 .bi-change span:last-child { font-family: var(--bi-mono); white-space: nowrap; }
-.bi-change del { color: var(--bi-faint); }
 .bi-cash { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; font-size: .78rem; }
 .bi-cash strong:last-child { font-family: var(--bi-mono); }
 .bi-transactions { display: grid; grid-template-columns: 1fr; gap: 10px; }
@@ -90,14 +98,14 @@
 @container (min-width: 820px) { .bi-transactions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } }
 @container (min-width: 900px) { .bi-month-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 @container (max-width: 620px) { .bi-toolbar { display: grid; grid-template-columns: 1fr 1.25fr 1fr; } .bi-toolbar select { width: 100%; padding: 0 4px; font-size: .75rem; } }
-.dark .budget-inspector { --bi-bg: #0d0f0d; --bi-surface: #141714; --bi-subtle: #191d19; --bi-border: #252b25; --bi-text: #eff2ec; --bi-muted: #959e91; --bi-faint: #6f776a; --bi-green: #86efac; --bi-red: #fca5a5; }
+.dark .budget-inspector { --bi-bg: #0d0f0d; --bi-surface: #141714; --bi-subtle: #191d19; --bi-border: #252b25; --bi-text: #eff2ec; --bi-muted: #959e91; --bi-faint: #6f776a; --bi-green: #86efac; --bi-red: #fca5a5; --bi-amber: #fbbf24; }
 .dark .bi-month { background: #1e241e; }
 .dark .bi-month.active { background: #b4f74d; color: #0e130a; }
 .dark .bi-month.active .bi-positive { color: #0e130a; }
 .dark .bi-net { background: #23331b; border-color: #547b31; }
 .dark .bi-net.negative { background: #381d1d; border-color: #7f3030; }
 @media (prefers-color-scheme: dark) {
-  .budget-inspector { --bi-bg: #0d0f0d; --bi-surface: #141714; --bi-subtle: #191d19; --bi-border: #252b25; --bi-text: #eff2ec; --bi-muted: #959e91; --bi-faint: #6f776a; --bi-green: #86efac; --bi-red: #fca5a5; }
+  .budget-inspector { --bi-bg: #0d0f0d; --bi-surface: #141714; --bi-subtle: #191d19; --bi-border: #252b25; --bi-text: #eff2ec; --bi-muted: #959e91; --bi-faint: #6f776a; --bi-green: #86efac; --bi-red: #fca5a5; --bi-amber: #fbbf24; }
   .bi-month { background: #1e241e; }
   .bi-month.active { background: #b4f74d; color: #0e130a; }
   .bi-month.active .bi-positive { color: #0e130a; }

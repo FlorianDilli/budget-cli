@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { monthLast } from '../domain/dates';
 import { planForMonth, type PlanLine } from '../domain/plan';
 import { useSession } from '../state/session';
@@ -8,6 +8,7 @@ import './budget-inspector.css';
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fullMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const colors = ['#ef4444', '#f97316', '#eab308', '#6366f1', '#a855f7', '#0ea5e9', '#ec4899'];
+const darkColors = ['#f87171', '#fb923c', '#facc15', '#818cf8', '#c084fc', '#38bdf8', '#f472b6'];
 const ymOf = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
 const sum = (lines: PlanLine[]) => lines.reduce((total, line) => total + line.monthlyCents, 0);
 const nameOf = (line: PlanLine) => line.entry.intuitiveName || line.entry.description || 'Untitled Transaction';
@@ -86,7 +87,7 @@ export function BudgetInspector({ financials, onSourceLineClick }: BudgetInspect
       </div>
       <Cashflow income={income} expenses={expenses} currency={money} month={`${fullMonths[month - 1]} ${year}`} />
       <details className="bi-diff"><summary><span>Changes vs. {fullMonths[previousMonth - 1]} {previousYear}</span><strong className={net - sum(previous) < 0 ? 'bi-negative' : 'bi-positive'}>{signed(net - sum(previous))}</strong><span className="bi-toggle"><span className="bi-expand">Expand</span><span className="bi-collapse">Collapse</span> ⌄</span></summary>
-        {([['New', added], ['Changed', changed], ['Removed', removed]] as const).map(([label, lines]) => lines.length > 0 && <div className="bi-diff-group" key={label}><h4>{label} ({lines.length})</h4>{lines.map((line) => <div className="bi-change" key={line.entry.index}><span>{nameOf(line)}</span><span>{label === 'Changed' && <del>{signed(previousByIndex.get(line.entry.index)!.monthlyCents)} </del>}{signed(line.monthlyCents)}</span></div>)}</div>)}
+        {([['New', added, 'bi-diff-new'], ['Changed', changed, 'bi-diff-changed'], ['Removed', removed, 'bi-diff-removed']] as const).map(([label, lines, cls]) => lines.length > 0 && <div className="bi-diff-group" key={label}><h4 className={cls}>{label.toUpperCase()} ({lines.length})</h4>{lines.map((line) => { const prev = previousByIndex.get(line.entry.index); const expense = line.monthlyCents < 0; const amountCls = label === 'Removed' ? 'bi-amount-removed' : expense ? 'bi-negative' : 'bi-positive'; return <div className="bi-change" key={line.entry.index}><span className="bi-change-name">{nameOf(line)}</span><span className="bi-change-values">{label === 'Changed' && prev && <del>{signed(prev.monthlyCents)}</del>}<span className={amountCls}>{signed(line.monthlyCents)}</span>{label === 'Changed' && prev && <span className="bi-change-delta">({signed(line.monthlyCents - prev.monthlyCents)})</span>}</span></div>; })}</div>)}
         {!added.length && !changed.length && !removed.length && <p className="bi-empty">No changes from the previous month.</p>}
       </details>
       {cash && <div className="bi-card bi-cash"><strong>Cash Snapshot ({cash.date})</strong><strong>{money(cash.cents)}{cash.cents < 0 ? ' (negative)' : ''}</strong></div>}
@@ -95,27 +96,96 @@ export function BudgetInspector({ financials, onSourceLineClick }: BudgetInspect
   </section>;
 }
 
+const prefersDark = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+
 function Cashflow({ income, expenses, currency, month }: { income: PlanLine[]; expenses: PlanLine[]; currency: (cents: number) => string; month: string }) {
+  const uid = useId().replace(/:/g, '');
+  const dark = prefersDark();
+  const incomeColor = dark ? '#4ade80' : '#16a34a';
+  const deficitColor = dark ? '#f87171' : '#dc2626';
+  const surplusColor = '#b9fe67';
+  const palette = dark ? darkColors : colors;
   const group = (lines: PlanLine[]) => {
     const totals = new Map<string, number>();
     for (const line of lines) totals.set(categoryOf(line), (totals.get(categoryOf(line)) || 0) + Math.abs(line.monthlyCents));
     return [...totals].filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]);
   };
-  const left = group(income), right = group(expenses);
   const incoming = sum(income), outgoing = -sum(expenses), total = Math.max(incoming, outgoing);
-  if (outgoing > incoming) left.push(['Deficit (unfunded)', outgoing - incoming]);
-  if (incoming > outgoing) right.push(['Surplus', incoming - outgoing]);
-  const height = Math.max(260, Math.max(left.length, right.length) * 38 + 60);
-  const hubHeight = 160, hubY = (height - hubHeight) / 2;
-  const layout = (nodes: [string, number][]) => {
-    let y = (height - hubHeight - Math.max(0, nodes.length - 1) * 20) / 2, hub = hubY;
-    return nodes.map(([name, value], i) => { const h = value / total * hubHeight; const node = { name, value, y, hub, h, color: name.startsWith('Deficit') ? '#dc2626' : name === 'Surplus' ? '#8fcf36' : colors[i % colors.length] }; y += h + 20; hub += h; return node; });
+  const isDeficit = outgoing > incoming;
+  if (!total) return <section className="bi-card bi-flow"><div className="bi-card-head"><span>Cashflow Sankey ({month})</span><span>Monthly plan</span></div><p className="bi-empty">No planned cash flow for this month.</p></section>;
+
+  type Node = { name: string; value: number; color: string; h: number; x: number; y: number; deficit: boolean };
+  const left: Node[] = group(income).map(([name, value]) => ({ name, value, color: incomeColor, h: 0, x: 0, y: 0, deficit: false }));
+  if (left.length === 0 && incoming > 0) left.push({ name: 'Unspecified Income', value: incoming, color: incomeColor, h: 0, x: 0, y: 0, deficit: false });
+  if (isDeficit) left.push({ name: 'Deficit (Savings Used)', value: outgoing - incoming, color: deficitColor, h: 0, x: 0, y: 0, deficit: true });
+  left.sort((a, b) => b.value - a.value);
+  const right: Node[] = group(expenses).map(([name, value], i) => ({ name, value, color: palette[i % palette.length], h: 0, x: 0, y: 0, deficit: false }));
+  if (!isDeficit && incoming > outgoing) right.push({ name: 'Surplus (Budget)', value: incoming - outgoing, color: surplusColor, h: 0, x: 0, y: 0, deficit: false });
+
+  const flowH = Math.max(260, Math.min(380, right.length * 38));
+  const perUnit = flowH / total;
+  const nodeW = 10, padY = 32, gap = 20, minSpacing = 32, minH = 6, leftX = 140, midX = 400, rightX = 640;
+  for (const n of [...left, ...right]) n.h = Math.max(minH, n.value * perUnit);
+  const midH = flowH;
+  const colHeight = (nodes: Node[]) => nodes.reduce((t, n, i) => t + (i === nodes.length - 1 ? n.h : Math.max(n.h + gap, minSpacing)), 0);
+  const maxCol = Math.max(colHeight(left), colHeight(right), midH);
+  const height = maxCol + padY * 2;
+  const place = (nodes: Node[], x: number) => {
+    let y = padY + (maxCol - colHeight(nodes)) / 2;
+    nodes.forEach((n, i) => { n.x = x; n.y = y; if (i < nodes.length - 1) y += Math.max(n.h + gap, minSpacing); });
   };
-  const l = total ? layout(left) : [], r = total ? layout(right) : [];
-  const path = (x1: number, x2: number, y1: number, y2: number, h: number) => `M${x1} ${y1} C420 ${y1} 420 ${y2} ${x2} ${y2} L${x2} ${y2 + h} C420 ${y2 + h} 420 ${y1 + h} ${x1} ${y1 + h} Z`;
-  return <section className="bi-card bi-flow"><div className="bi-card-head"><span>Cashflow Sankey ({month})</span><span>Monthly plan</span></div>{!total ? <p className="bi-empty">No planned cash flow for this month.</p> : <><div className="bi-flow-scroll"><svg viewBox={`0 0 840 ${height}`} role="img" aria-label="Monthly planned cashflow by category">
-    {l.map((n) => <g key={n.name}><path d={path(170, 415, n.y, n.hub, n.h)} fill={n.name.startsWith('Deficit') ? n.color : '#16a34a'} opacity=".55"><title>{n.name}: {currency(n.value)}</title></path><text x="160" y={n.y + n.h / 2} textAnchor="end">{n.name.length > 20 ? n.name.slice(0, 19) + '…' : n.name}</text><text className="bi-flow-value" x="160" y={n.y + n.h / 2 + 14} textAnchor="end">{currency(n.value)}</text><rect x="170" y={n.y} width="8" height={n.h} fill={n.name.startsWith('Deficit') ? n.color : '#16a34a'} /></g>)}
-    {r.map((n) => <g key={n.name}><path d={path(425, 670, n.hub, n.y, n.h)} fill={n.color} opacity=".55"><title>{n.name}: {currency(n.value)}</title></path><rect x="662" y={n.y} width="8" height={n.h} fill={n.color} /><text x="680" y={n.y + n.h / 2}>{n.name.length > 20 ? n.name.slice(0, 19) + '…' : n.name}</text><text className="bi-flow-value" x="680" y={n.y + n.h / 2 + 14}>{currency(n.value)}</text></g>)}
-    <rect x="415" y={hubY} width="10" height={hubHeight} fill={outgoing > incoming ? '#dc2626' : '#16a34a'} /><text x="420" y={hubY - 12} textAnchor="middle">{outgoing > incoming ? 'Total outflow' : 'Total income'}</text><text className="bi-flow-value" x="420" y={hubY + hubHeight + 18} textAnchor="middle">{currency(total)}</text>
-  </svg></div><p className="bi-flow-note">Monthly plan; deficit is not assumed to be funded.</p></>}</section>;
+  place(left, leftX);
+  place(right, rightX);
+  const midY = padY + (maxCol - midH) / 2;
+  const hubColor = isDeficit ? deficitColor : incomeColor;
+  const label = (name: string) => (name.length > 22 ? `${name.slice(0, 21)}…` : name);
+  const pct = (value: number) => Math.round((value / total) * 100);
+
+  // Ribbons: left -> hub and hub -> right, each with a horizontal gradient at 45% opacity.
+  let inY = midY, outY = midY;
+  const leftRibbons = left.map((n, i) => {
+    const slice = (n.value / total) * midH;
+    const x0 = n.x + nodeW, x1 = midX, xm = (x0 + x1) / 2;
+    const y0 = inY, y1 = inY + slice;
+    inY += slice;
+    const d = `M ${x0} ${n.y} C ${xm} ${n.y}, ${xm} ${y0}, ${x1} ${y0} L ${x1} ${y1} C ${xm} ${y1}, ${xm} ${n.y + n.h}, ${x0} ${n.y + n.h} Z`;
+    return { key: `l${i}`, d, from: n.color, to: hubColor, name: n.name, value: n.value, sign: n.deficit ? '-' : '+' };
+  });
+  const rightRibbons = right.map((n, i) => {
+    const slice = (n.value / total) * midH;
+    const x0 = midX + nodeW, x1 = n.x, xm = (x0 + x1) / 2;
+    const y0 = outY, y1 = outY + slice;
+    outY += slice;
+    const d = `M ${x0} ${y0} C ${xm} ${y0}, ${xm} ${n.y}, ${x1} ${n.y} L ${x1} ${n.y + n.h} C ${xm} ${n.y + n.h}, ${xm} ${y1}, ${x0} ${y1} Z`;
+    return { key: `r${i}`, d, from: hubColor, to: n.color, name: n.name, value: n.value, sign: '' };
+  });
+
+  return <section className="bi-card bi-flow">
+    <div className="bi-card-head"><span>Cashflow Sankey ({month})</span><span>{isDeficit ? 'Income & deficit → outflow' : 'Income → total income'}</span></div>
+    <div className="bi-flow-scroll">
+      <svg viewBox={`0 0 840 ${height}`} role="img" aria-label="Monthly planned cashflow by category">
+        <defs>
+          {[...leftRibbons, ...rightRibbons].map((r) => <linearGradient key={r.key} id={`${uid}-${r.key}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={r.from} stopOpacity=".45" /><stop offset="100%" stopColor={r.to} stopOpacity=".45" />
+          </linearGradient>)}
+        </defs>
+        {leftRibbons.map((r) => <path key={r.key} d={r.d} fill={`url(#${uid}-${r.key})`}><title>{r.name} → {isDeficit ? 'Total Outflow' : 'Total Income'}: {r.sign}{currency(r.value)}</title></path>)}
+        {rightRibbons.map((r) => <path key={r.key} d={r.d} fill={`url(#${uid}-${r.key})`}><title>{isDeficit ? 'Total Outflow' : 'Total Income'} → {r.name}: {currency(r.value)}</title></path>)}
+        {left.map((n, i) => <g key={`ln${i}`}>
+          <rect x={n.x} y={n.y} width={nodeW} height={n.h} rx="3" fill={n.color} />
+          <text x={n.x - 8} y={n.y + n.h / 2 - 6} textAnchor="end" dominantBaseline="central" className="bi-flow-name">{label(n.name)}</text>
+          <text x={n.x - 8} y={n.y + n.h / 2 + 8} textAnchor="end" dominantBaseline="central" className="bi-flow-value" style={{ fill: n.deficit ? deficitColor : undefined }}>{n.deficit ? '-' : '+'}{currency(n.value)}</text>
+        </g>)}
+        <rect x={midX} y={midY} width={nodeW} height={midH} rx="3" fill={hubColor} />
+        <text x={midX + nodeW / 2} y={midY - 12} textAnchor="middle" className="bi-flow-name">{isDeficit ? 'Total Outflow' : 'Total Income'}</text>
+        <text x={midX + nodeW / 2} y={midY + midH + 16} textAnchor="middle" className="bi-flow-value">{currency(total)}</text>
+        {right.map((n, i) => <g key={`rn${i}`}>
+          <rect x={n.x} y={n.y} width={nodeW} height={n.h} rx="3" fill={n.color} />
+          <text x={n.x + nodeW + 8} y={n.y + n.h / 2 - 6} dominantBaseline="central" className="bi-flow-name">{label(n.name)}</text>
+          <text x={n.x + nodeW + 8} y={n.y + n.h / 2 + 8} dominantBaseline="central" className="bi-flow-value">{currency(n.value)} ({pct(n.value)}%)</text>
+        </g>)}
+      </svg>
+    </div>
+    <p className="bi-flow-note">Monthly plan; deficit is not assumed to be funded.</p>
+  </section>;
 }
