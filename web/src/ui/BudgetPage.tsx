@@ -71,7 +71,6 @@ export function BudgetPage() {
 
   return <section className={`budget-studio${view === 'budget' ? ' is-budget' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
     <header className="studio-header">
-      <span className="studio-filename">financials.toml</span>
       <nav className="studio-tabs" aria-label="Budget view">
         {(['editor', 'split', 'budget'] as const).map((mode) => <button type="button" key={mode} className={view === mode ? 'active' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === 'editor' ? 'Editor' : mode === 'split' ? 'Split' : 'Visual Budget'}</button>)}
       </nav>
@@ -82,7 +81,7 @@ export function BudgetPage() {
         <button type="button" className="primary" disabled={!dirty || !parsed.ok || saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </header>
-    <div className="studio-status" role="status">{!parsed.ok ? 'Invalid draft. Showing the saved budget.' : dirty ? 'Unsaved preview. Save to apply this budget to the app.' : 'Saved budget'}{notice && ` ${notice}`}</div>
+    <div className="studio-status" role="status">{!parsed.ok ? 'Invalid draft. Showing the saved budget.' : dirty ? 'Unsaved preview. Save to apply this budget to the app.' : 'Saved budget'}{notice && ` ${notice}`}<span className="studio-status-actions">{legacyDraft !== null && <button type="button" onClick={() => { if (window.confirm('Replace this draft with the previous standalone Budget draft? It remains stored separately in plaintext until you remove it from browser storage.')) { session.setDraft('financials', legacyDraft); setView('editor'); setNotice('Previous standalone draft loaded. Save to encrypt and apply it.'); } }}>Recover old draft</button>}<button type="button" disabled={!dirty || saving} onClick={() => { session.setDraft('financials', isSample ? SAMPLE_FINANCIALS : snapshot.financialsToml); setNotice('Draft discarded.'); }}>Discard changes</button></span></div>
     <div className={`studio-panels studio-${view}`}>
       <div className="studio-editor" hidden={view === 'budget'}>
         <div className="studio-symbols" role="group" aria-label="Editor actions">
@@ -101,6 +100,5 @@ export function BudgetPage() {
         <BudgetInspector financials={display} onSourceLineClick={parsed.ok ? (line) => { setView(view === 'split' ? 'split' : 'editor'); setJump({ line }); } : undefined} />
       </div>
     </div>
-    <footer className="studio-footer"><span>{draft.split('\n').length} Lines</span><span>{display.recurring.length} Recurring</span><span>{parsed.ok ? 'Valid' : 'Needs attention'}</span>{legacyDraft !== null && <button type="button" onClick={() => { if (window.confirm('Replace this draft with the previous standalone Budget draft? It remains stored separately in plaintext until you remove it from browser storage.')) { session.setDraft('financials', legacyDraft); setView('editor'); setNotice('Previous standalone draft loaded. Save to encrypt and apply it.'); } }}>Recover old draft</button>}<button type="button" disabled={!dirty || saving} onClick={() => { session.setDraft('financials', isSample ? SAMPLE_FINANCIALS : snapshot.financialsToml); setNotice('Draft discarded.'); }}>Discard changes</button></footer>
   </section>;
 }
