@@ -1,14 +1,14 @@
 # Local-First Browser App Plan (final candidate)
 
-Status: platform, scope, the budget definition (Decision 18), and the month-level activity rule (Decision 19) are decided. The Python CLI is legacy and is not changed. Only the current remote `main` counts as the editor reference. `FlorianDilli/budget-cli` is public. The budget editor is on remote `main` as `index.html` (commit `f229586`) with synthetic sample values. The original figures remain in older public history and on the live page, so Immediate Actions 1-2 must be decided before the repository is treated as clean.
+Status: platform, scope, the budget definition (Decision 18), and the month-level activity rule (Decision 19) are decided. The Python CLI is legacy and is not changed. `budget-web` is the fresh-start implementation branch and contains exactly three tracked files: `index.html`, `logo.svg`, and this plan at `docs/local-first-browser-app-plan.md`. Start implementation from this branch, not `main`. The repository is public. Original sample figures remain in `main`'s public history and on the live page, so Immediate Actions 1-2 remain relevant to the wider repository.
 
 ## Immediate Actions (Before Any Commit Or Deploy)
 
 1. Remove your figures from the live page `https://floriandilli.github.io/TOML-Editor/`. Verified: its served script contains the financial sample (`amount = 3400.00`, `MAINGAU Energie GmbH`). This is your action; this plan cannot change that deployment.
 2. The repository is public. After `git fetch origin`, check every branch for your figures: `git log --all -S "MAINGAU" --oneline` and `git log --all -S "3400.00" --oneline`. If matches exist, removing them from public history requires a rewrite and force-push. Do not do that without your explicit approval.
-3. Run `git fetch origin`. The workspace's local `main` (`856fde0`) is behind remote `main` (`f229586`).
+3. Before starting implementation, confirm the checkout is `budget-web` and that its starting tree contains only `index.html`, `logo.svg`, and `docs/local-first-browser-app-plan.md`. Add app files on this branch.
 
-Done: remote `main` `index.html` (commit `f229586`) is the budget version with synthetic `SAMPLE_TEMPLATES.financials` values. It is the porting reference: read it from `origin/main`, and do not copy the original attachment into the repo. Verified by public raw URL: no `MAINGAU` or `3400` in the file.
+Done: the sanitized budget editor, logo, and plan have been copied to `budget-web`. Its `index.html` is the porting reference; no attachment or separate main-branch checkout is needed. The reference uses synthetic `SAMPLE_TEMPLATES.financials` values and contains no `MAINGAU` or `3400`.
 
 ## Scope
 
@@ -30,11 +30,11 @@ Out of scope: Budget Forecast (core.py:1098), Simulate the future (core.py:1535-
 - Parse and validate, then the shared TypeScript domain layer (plan, transaction calculations, categorization, duplicate detection) produces the active snapshot.
 - The active snapshot is encrypted and stored in IndexedDB. Decrypted data exists in memory only while unlocked.
 - Outputs: `.budget` (same envelope), TOML download (raw text of the active version), and the UI.
-- Boundaries: changes only under `web/`, `.gitignore`, and a GitHub Actions workflow. The Python CLI (`main.py`, `app/`), FAQ.md, and the example TOML files are not modified. The reference HTML is a porting reference only and is not shipped.
+- Boundaries: implement on `budget-web`, starting with the three tracked source/reference files listed above. The Python CLI (`main.py`, `app/`), FAQ.md, and the example TOML files are not modified. The checked-in `index.html` is a porting reference; it will be replaced by the web app entry point once the app shell is implemented.
 
-## TOML Studio Editor (Reference On Remote `main`)
+## TOML Studio Editor (Reference On `budget-web`)
 
-Source: `index.html` on remote `main` (commit `f229586`), titled "moonli TOML Studio & Budget Inspector". Verified features:
+Source: `index.html` on `budget-web`, titled "moonli TOML Studio & Budget Inspector". Verified features:
 - Editor (CodeMirror 5), split and single view modes, symbol bar (`[ ] [[ ]] { } " ' = # ,` and Tab), Clear, Copy, undo and redo, search, line wrap, drag-and-drop and Open for files, Download.
 - Visual Budget, plan-only: `calculateMonthBudget` (line 3138) and `getEffectiveTransactionForMonth` (line 2803). It reads recurring entries and cash from the TOML and never uses imported transactions.
 - Hand-written `Toml11Parser` (line 2028).
@@ -45,7 +45,7 @@ Shared findings:
 - No `fetch`, XHR, analytics, or beacon calls. External requests: Google Fonts, cdnjs (CodeMirror 5.65.16), jsDelivr (Lucide 0.469.0). Bundle all assets; no runtime CDN.
 - Persistence: the editor autosaves the full document to `localStorage` (`moonli_toml_content`) on every change. Unencrypted; must not be carried into the merged app. Preferences (dark mode, line wrap, currency, sort) may stay in `localStorage`.
 - `intuitive_name` is the display name, and `category` defaults to "General" (lines 2860-2862). The engine uses neither.
-- `logo.svg` is referenced (favicon and header) but is not in the repository.
+- `logo.svg` is present at the root of `budget-web` and is referenced by the editor.
 
 Merge rules:
 1. Keep: CodeMirror editor, symbol bar, search, undo and redo, line wrap, error banner with jump to line, drag-and-drop open, Open, Download, Copy, Clear, and Visual Budget (month strip, KPIs, Sankey, month diff, cash banner, sorting, currency).
@@ -119,8 +119,8 @@ Adopted unless changed during golden-test review:
 
 ## Ordered Tasks
 
-1. Decide and complete Immediate Actions 1-3.
-2. Create `feat/local-first-web-app` from `origin/main` (remote `main` `f229586` at this writing), not from local `main` (`856fde0`) and not from `kilo/empty-path-81k`. Scaffold `web/` with Vite, React, TypeScript, routing, and the responsive shell.
+1. Confirm the active branch is `budget-web` and its starting tree contains only `index.html`, `logo.svg`, and `docs/local-first-browser-app-plan.md`. Decide and complete Immediate Actions 1-2 for the wider public repository/live page.
+2. Scaffold the app under `web/` with Vite, React, TypeScript, routing, and the responsive shell. Continue on `budget-web`; do not create a branch from `main`. Keep the root `index.html` available as the budget-editor reference while porting.
 3. Build the pure TypeScript domain layer: CSV and TOML parsers, data model, shared plan function (Decision 19), transaction calculations, categorization, duplicate detection. No UI.
 4. Add golden tests: Python-engine outputs for matching, duplicates, categories, and total money; Decision 19 fixtures for plan rules.
 5. Build the crypto envelope and IndexedDB store: create, unlock, lock, change password, reset.
@@ -128,7 +128,7 @@ Adopted unless changed during golden-test review:
 7. Build the CSV import flow: select, detect format, preview, correct mapping, confirm, summary.
 8. Build screens: Overview; Transactions; Insights (history, months at a glance, total-money chart); Settings (editors for `settings.toml` and `financials.toml`); Data (delete month, full reset, change password).
 9. Build the save-and-apply flow (Decision 15) and the draft model (Decision 17).
-10. Port the editor into Settings and the Visual Budget view, from `origin/main:index.html`, using synthetic sample data. Replace the parser and the CDN assets.
+10. Port the editor into Settings and the Visual Budget view, from the root `index.html` on `budget-web`, using synthetic sample data. Replace the parser and the CDN assets.
 11. Add the PWA manifest, service worker, install prompt, and offline behavior.
 12. Add GitHub Actions for build, test, and Pages deploy. Set the Pages source to "GitHub Actions" in repository settings. Use the repository name for the Vite base path.
 13. Write in-app help text for the activity and price rules. Leave FAQ.md (CLI documentation) unchanged.
@@ -136,8 +136,8 @@ Adopted unless changed during golden-test review:
 
 ## Repository Hygiene
 
-- Current `.gitignore` covers `userdata/`, `*.db`, and `.kilo/`. Add `*.budget`, `*.salt`, `*.csv`, `statements/`, and real `settings.toml` and `financials.toml`. Allow synthetic fixtures under `web/test/fixtures/`.
-- `.kilo/` is git-ignored, so this plan is not versioned. Move it to a tracked location if it should be committed.
+- The fresh-start branch has no `.gitignore` at its starting point. Add ignores for `*.budget`, `*.salt`, `*.csv`, `statements/`, and real `settings.toml` and `financials.toml`. Allow synthetic fixtures under `web/test/fixtures/`.
+- This plan is tracked at `docs/local-first-browser-app-plan.md` on `budget-web`.
 - The repository is public: commit only synthetic data, and run the secret scan below before every push.
 
 ## Validation
@@ -166,13 +166,13 @@ Adopted unless changed during golden-test review:
 
 ## Rollout
 
-Feature branch from `origin/main`, pull request, merge, Pages deploy. No SQLite migration. The Python CLI is unchanged.
+Continue on `budget-web`, then open a pull request to `main` when the web app is ready. Configure Pages to deploy the app from this branch or after merge, as chosen during implementation. No SQLite migration. The Python CLI is unchanged.
 
 ## Open Questions
 
 1. Resolved: the Python CLI is legacy and is not changed.
 2. Sample templates: drop the non-budget samples (Cargo, pyproject, config, fly). Default: drop.
-3. Logo: resolved. `logo.svg` is on remote `main` (512x512 SVG, moonli mark). Use it for the favicon and header; bundle it with the app.
+3. Logo: resolved. `logo.svg` is at the root of `budget-web` (512x512 SVG, moonli mark). Use it for the favicon and header; bundle it with the app.
 4. Recurring `category` on matched transactions: deferred. Default: store and display it; transactions keep `category_rules` results.
 5. Restore: replace local data (default), with a warning when the backup is older. Merge is not planned.
 6. Repository visibility: resolved. `FlorianDilli/budget-cli` is public, so Immediate Actions 1-2 apply, and GitHub Pages is available without a paid plan.
@@ -180,7 +180,7 @@ Feature branch from `origin/main`, pull request, merge, Pages deploy. No SQLite 
 8. Brand name: keep "moonli" (default).
 
 Resolved:
-- Only the current remote `main` counts as the editor reference. Tree View, Format, and Share are out of scope.
+- Only the current editor on `budget-web` is the reference. Tree View, Format, and Share are out of scope.
 - `settings.toml` uses the same editor as `financials.toml` (Decision 14).
 - Plan versus actual: the `financials.toml` plan is the budget, and "left" is calculated from it (Decision 18).
 - Plan-rule conflicts: Decision 19 defines activity and price for the web app.
