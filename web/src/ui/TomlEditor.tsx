@@ -3,7 +3,8 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, highlightSpecialChars } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
-import { StreamLanguage, bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { StreamLanguage, bracketMatching, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 import { toml } from '@codemirror/legacy-modes/mode/toml';
 
 export interface TomlEditorHandle {
@@ -22,6 +23,18 @@ interface Props {
 }
 
 const tomlLang = StreamLanguage.define(toml);
+
+// Token colors ported from the reference editor (.cm-s-default), with light and dark values in styles.css.
+const tomlHighlight = HighlightStyle.define([
+  { tag: t.heading, color: 'var(--code-header)', fontWeight: '700', backgroundColor: 'var(--code-header-bg)', borderRadius: '3px' },
+  { tag: t.atom, color: 'var(--code-atom)', fontWeight: '700' },
+  { tag: t.number, color: 'var(--code-number)', fontWeight: '600' },
+  { tag: [t.string, t.special(t.string)], color: 'var(--code-string)' },
+  { tag: t.comment, color: 'var(--code-comment)', fontStyle: 'italic' },
+  { tag: t.propertyName, color: 'var(--code-property)', fontWeight: '600' },
+  { tag: [t.definition(t.variableName), t.variableName], color: 'var(--code-header)', fontWeight: '700' },
+  { tag: t.operator, color: 'var(--code-operator)', fontWeight: '700' },
+]);
 
 export const TomlEditor = forwardRef<TomlEditorHandle, Props>(function TomlEditor({ value, onChange, wrap, ariaLabel }, ref) {
   const host = useRef<HTMLDivElement>(null);
@@ -45,7 +58,7 @@ export const TomlEditor = forwardRef<TomlEditorHandle, Props>(function TomlEdito
           search({ top: true }),
           bracketMatching(),
           tomlLang,
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          syntaxHighlighting(tomlHighlight),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           wrapComp.current.of(wrap ? EditorView.lineWrapping : []),
           EditorView.contentAttributes.of({ 'aria-label': ariaLabel, spellcheck: 'false', autocapitalize: 'off' }),

@@ -13,6 +13,19 @@
   --err-bg: #fde8e7;
   --err: #8a1c14;
   --ok: #1e6b3c;
+  --code-text: #1a1e17;
+  --code-header: #11150e;
+  --code-header-bg: #f1fcdb;
+  --code-atom: #0f766e;
+  --code-number: #8b5cf6;
+  --code-string: #166534;
+  --code-comment: #788273;
+  --code-property: #11140e;
+  --code-operator: #525a4d;
+  --code-selection: #dbf8a7;
+  --code-active-line: rgba(180, 247, 77, 0.12);
+  --code-gutter: #eff2eb;
+  --code-line-number: #8e9587;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   font-family: var(--font);
@@ -33,6 +46,19 @@
     --err-bg: #3d1716;
     --err: #ffb4ab;
     --ok: #8fe0ae;
+    --code-text: #dbe0d7;
+    --code-header: #d7fc8d;
+    --code-header-bg: rgba(180, 247, 77, 0.16);
+    --code-atom: #5eead4;
+    --code-number: #c4b5fd;
+    --code-string: #86efac;
+    --code-comment: #697464;
+    --code-property: #f2f5ee;
+    --code-operator: #a2ab9d;
+    --code-selection: rgba(180, 247, 77, 0.22);
+    --code-active-line: rgba(180, 247, 77, 0.07);
+    --code-gutter: #151915;
+    --code-line-number: #616a5d;
   }
 }
 
@@ -296,8 +322,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .editor-symbols .sym { min-width: 1.9rem; }
 .editor-grid .toml-editor { flex: 1; border: 0; border-radius: 0; background: var(--surface); }
 .editor-grid .toml-editor .cm-editor { height: 100%; min-height: 420px; max-height: 70vh; font-size: 13.5px; line-height: 1.65; }
-.editor-grid .cm-gutters { background: var(--bg); color: var(--muted); }
-.editor-grid .cm-activeLine { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.toml-editor .cm-editor { color: var(--code-text); }
+.toml-editor .cm-content { caret-color: var(--text); }
+.toml-editor .cm-cursor { border-left-color: var(--text); }
+.toml-editor .cm-selectionBackground, .toml-editor.cm-focused .cm-selectionBackground, .toml-editor ::selection { background: var(--code-selection) !important; }
+.toml-editor .cm-gutters { background: var(--code-gutter); color: var(--code-line-number); border-right: 1px solid var(--border); }
+.toml-editor .cm-lineNumbers .cm-gutterElement { color: var(--code-line-number); font-size: 12px; padding: 0 5px; }
+.toml-editor .cm-activeLine, .toml-editor .cm-activeLineGutter { background: var(--code-active-line); }
 .editor-grid .error-banner { border-radius: 0; }
 .editor-grid .errors { margin: .5rem 1rem; }
 .pane-foot { padding: .55rem .75rem; background: var(--bg); border-top: 1px solid var(--border); font-size: .75rem; }
