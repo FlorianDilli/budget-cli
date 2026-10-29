@@ -5,6 +5,7 @@ import { Overview } from './ui/Overview';
 import { Transactions } from './ui/Transactions';
 import { Insights } from './ui/Insights';
 import { Settings } from './ui/Settings';
+import { BudgetPage } from './ui/BudgetPage';
 
 export function App() {
   return (
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/', label: 'Overview', icon: '◎' },
   { to: '/transactions', label: 'Transactions', icon: '≡' },
   { to: '/insights', label: 'Insights', icon: '↗' },
+  { to: '/budget', label: 'Budget', icon: '▤' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -59,6 +61,7 @@ function Shell() {
           <Route path="/" element={<Overview />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/insights" element={<Insights />} />
+          <Route path="/budget" element={<BudgetPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

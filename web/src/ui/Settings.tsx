@@ -1,23 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession, type SaveResult } from '../state/session';
 import { TomlEditor, type TomlEditorHandle } from './TomlEditor';
 import { parseSettings, parseFinancials, type ValidationIssue, type Parsed } from '../domain/config';
 import { SAMPLE_FINANCIALS, SAMPLE_SETTINGS } from '../domain/sample';
-import { planBudgetCents, planForMonth, type PlanLine } from '../domain/plan';
-import { addMonths, currentMonth, monthLabel, monthLast, type YearMonth } from '../domain/dates';
-import { centsToDecimal, type Cents } from '../domain/money';
+import { currentMonth, type YearMonth } from '../domain/dates';
 import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
-import { Card, Money, MonthSelect, currencyOf, dataMonths } from './common';
+import { Card, MonthSelect, currencyOf, dataMonths } from './common';
 import { MIN_PASSWORD_LENGTH } from '../state/session';
-import { CashFlow } from './CashFlow';
 
-const TABS = ['editor', 'budget', 'data'] as const;
+const TABS = ['editor', 'data'] as const;
 type Tab = (typeof TABS)[number];
 
 export function Settings() {
-  const [jump, setJump] = useState<{ line: number } | null>(null);
   const [params, setParams] = useSearchParams();
   const raw = params.get('tab');
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'editor';
@@ -29,13 +25,12 @@ export function Settings() {
         <nav className="subtabs" aria-label="Settings sections">
           {TABS.map((t) => (
             <button key={t} type="button" className={t === tab ? 'active' : ''} aria-pressed={t === tab} onClick={() => setTab(t)}>
-              {t === 'editor' ? 'Editor' : t === 'budget' ? 'Visual Budget' : 'Data'}
+              {t === 'editor' ? 'Editor' : 'Data'}
             </button>
           ))}
         </nav>
       </header>
-      <div hidden={tab !== 'editor'}><EditorTab jump={jump} /></div>
-      {tab === 'budget' && <BudgetTab onJump={(line) => { setJump({ line }); setTab('editor'); }} />}
+      <div hidden={tab !== 'editor'}><EditorTab /></div>
       {tab === 'data' && <DataTab />}
     </div>
   );
@@ -43,10 +38,9 @@ export function Settings() {
 
 // ------------------------------------------------------------------ Editor
 
-function EditorTab({ jump }: { jump: { line: number } | null }) {
+function EditorTab() {
   const { snapshot, isSample } = useSession();
   const [view, setView] = useState<'split' | 'settings' | 'financials'>('split');
-  useEffect(() => { if (jump) setView('financials'); }, [jump]);
   if (!snapshot) return null;
   return (
     <div className="editor-studio">
@@ -73,8 +67,6 @@ function EditorTab({ jump }: { jump: { line: number } | null }) {
           sample={SAMPLE_FINANCIALS}
           isSample={isSample}
           parse={parseFinancials}
-          jump={jump}
-          jumpVisible={view === 'financials'}
         />
         </div>
       </div>
@@ -91,8 +83,6 @@ function EditorPane<T>({
   sample,
   isSample,
   parse,
-  jump,
-  jumpVisible,
 }: {
   kind: 'settings' | 'financials';
   fileName: string;
@@ -100,8 +90,6 @@ function EditorPane<T>({
   sample: string;
   isSample: boolean;
   parse: (text: string) => Parsed<T>;
-  jump?: { line: number } | null;
-  jumpVisible?: boolean;
 }) {
   const session = useSession();
   const draft = session.drafts[kind] ?? (isSample ? sample : savedText);
@@ -111,7 +99,6 @@ function EditorPane<T>({
   const [notice, setNotice] = useState<string | null>(null);
   const ref = useRef<TomlEditorHandle>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (jump && jumpVisible) ref.current?.jumpToLine(jump.line); }, [jump, jumpVisible]);
 
   const live = useMemo(() => parse(draft), [draft, parse]);
   const liveIssues: ValidationIssue[] = live.ok ? [] : live.issues;
@@ -215,80 +202,6 @@ function EditorPane<T>({
         {notice && <span className="muted" role="status">{notice}</span>}
       </footer>
     </section>
-  );
-}
-
-// ------------------------------------------------------------------ Visual Budget
-
-function BudgetTab({ onJump }: { onJump: (line: number) => void }) {
-  const { snapshot, settings, financials, drafts, isSample } = useSession();
-  const now = useMemo(() => new Date(), []);
-  const [ym, setYm] = useState<YearMonth>(() => currentMonth(now));
-  const [sort, setSort] = useState<'amount' | 'category' | 'name'>('amount');
-  const [currency, setCurrency] = useState('');
-  if (!snapshot) return null;
-  const cur = currency || currencyOf(settings);
-  const plan = planForMonth(financials, ym);
-  const previous = planForMonth(financials, addMonths(ym, -1));
-  const income = plan.filter((p) => p.active && p.monthlyCents > 0);
-  const expense = plan.filter((p) => p.active && p.monthlyCents < 0);
-  const incomeSum: Cents = income.reduce((s, p) => s + p.monthlyCents, 0);
-  const expenseSum: Cents = expense.reduce((s, p) => s + p.monthlyCents, 0);
-  const net = planBudgetCents(plan);
-  const due = (lines: PlanLine[]) => lines.reduce((sum, line) => sum + (line.isDue ? line.priceCents ?? 0 : 0), 0);
-  const canJump = (drafts.financials ?? (isSample ? SAMPLE_FINANCIALS : snapshot.financialsToml)) === (isSample ? SAMPLE_FINANCIALS : snapshot.financialsToml);
-  const cash = financials.cash.filter((c) => c.date <= monthLast(ym)).sort((a, b) => b.date.localeCompare(a.date))[0];
-  const changes = plan.map((line, i) => ({ line, before: previous[i]?.monthlyCents ?? 0 })).filter(({ line, before }) => line.monthlyCents !== before);
-  const sorted = (lines: PlanLine[]) => [...lines].sort((a, b) => sort === 'amount' ? Math.abs(b.monthlyCents) - Math.abs(a.monthlyCents) : sort === 'category' ? (a.entry.category || 'General').localeCompare(b.entry.category || 'General') : lineName(a).localeCompare(lineName(b)));
-
-  return (
-    <div className="budget">
-      <div className="budget-toolbar">
-        <div className="year-control"><button type="button" aria-label="Previous year" onClick={() => setYm(addMonths(ym, -12))}>←</button><strong>{ym.slice(0, 4)}</strong><button type="button" aria-label="Next year" onClick={() => setYm(addMonths(ym, 12))}>→</button></div>
-        <label>Sort <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="amount">Amount</option><option value="category">Category</option><option value="name">Name</option></select></label>
-        <label>Currency label <select value={currency} onChange={(e) => setCurrency(e.target.value)}><option value="">Settings ({currencyOf(settings)})</option><option value="€">€ EUR</option><option value="$">$ USD</option><option value="£">£ GBP</option><option value="CHF">CHF</option></select></label>
-      </div>
-      <div className="month-overview">
-      <p className="budget-caption">{ym.slice(0, 4)} Monthly Overview <span>Select a month to inspect</span></p>
-      <div className="month-strip" aria-label="Budget months">
-        {Array.from({ length: 12 }, (_, i) => `${ym.slice(0, 4)}-${String(i + 1).padStart(2, '0')}`).map((month) => { const monthNet = planBudgetCents(planForMonth(financials, month)); return <button type="button" key={month} className={`${month === ym ? 'active' : ''} ${month === currentMonth(now) ? 'current' : ''}`} aria-pressed={month === ym} aria-label={`${monthLabel(month)}, net ${centsToDecimal(monthNet)} ${cur}`} onClick={() => setYm(month)}><span>{monthLabel(month).split(' ')[0]}</span><strong className={monthNet < 0 ? 'neg' : 'pos'}>{monthNet >= 0 ? '+' : ''}{centsToDecimal(monthNet)}</strong></button>; })}
-      </div>
-      </div>
-      <div className="kpis budget-kpis">
-        <Kpi label="Income / month" value={<Money cents={incomeSum} currency={cur} />} sub={<>Due: <Money cents={due(income)} currency={cur} /></>} />
-        <Kpi label="Expenses / month" value={<Money cents={expenseSum} currency={cur} />} sub={<>Due: <Money cents={due(expense)} currency={cur} /></>} />
-        <Kpi label="Net budget" value={<Money cents={net} currency={cur} />} sub={net >= 0 ? 'Surplus' : 'Deficit'} />
-        <Kpi label="Savings rate" value={incomeSum > 0 ? `${(net / incomeSum * 100).toFixed(1)}%` : '—'} sub={incomeSum > 0 ? 'of income' : 'No income'} />
-      </div>
-      <CashFlow plan={plan} currency={cur} month={ym} />
-      <details className="budget-changes"><summary><span>Changes vs. {monthLabel(addMonths(ym, -1))}</span><span className="change-toggle"><span className="expand-label">Expand</span><span className="collapse-label">Collapse</span> ▾</span></summary>
-        {changes.length ? <div className="change-list">{changes.map(({ line, before }) => <div key={line.entry.index}><span>{lineName(line)}</span><span><span className="muted">{centsToDecimal(before)} → </span><Money cents={line.monthlyCents} currency={cur} /></span></div>)}</div> : <p className="muted">No changes to the monthly plan.</p>}
-      </details>
-      <div className="cash-banner"><span>Cash snapshot {cash ? `· ${cash.date}` : ''}</span><strong>{cash ? <Money cents={cash.cents} currency={cur} /> : 'Not recorded'}</strong></div>
-      <div className="grid-2">
-        <PlanList title="Income" lines={sorted(income)} currency={cur} grouped={sort === 'category'} canJump={canJump} onJump={onJump} />
-        <PlanList title="Expenses" lines={sorted(expense)} currency={cur} grouped={sort === 'category'} canJump={canJump} onJump={onJump} />
-      </div>
-      <p className="muted small">Saved plan only · Currency labels do not convert amounts. Entries count when active on any day of the month. Prices use the latest amount effective by month end; less frequent payments are averaged over their recurrence. Due amounts are planned, not actual payments.</p>
-      {!canJump && <p className="muted small">Save or discard the financials draft to enable source-line navigation.</p>}
-    </div>
-  );
-}
-
-function lineName(line: PlanLine) { return line.entry.intuitiveName || line.entry.description || line.entry.label; }
-
-function PlanList({ title, lines, currency, grouped, canJump, onJump }: { title: string; lines: PlanLine[]; currency: string; grouped: boolean; canJump: boolean; onJump: (line: number) => void }) {
-  const groups = grouped ? Array.from(new Set(lines.map((line) => line.entry.category || 'General'))).map((category) => ({ category, lines: lines.filter((line) => (line.entry.category || 'General') === category) })) : [{ category: '', lines }];
-  return <section className={`budget-list ${title === 'Income' ? 'income-list' : 'expense-list'}`}><header><h2>{title}</h2><strong><Money cents={lines.reduce((sum, line) => sum + line.monthlyCents, 0)} currency={currency} /></strong></header>{lines.length === 0 ? <p className="muted budget-empty">No planned {title.toLowerCase()} this month.</p> : <div className="plan-list">{groups.map((group) => <div key={group.category}>{grouped && <div className="category-heading"><span>{group.category}</span><Money cents={group.lines.reduce((sum, line) => sum + line.monthlyCents, 0)} currency={currency} /></div>}{group.lines.map((line) => <div className="plan-item" key={line.entry.index}><div><strong>{lineName(line)}</strong><span><span className="category-badge">{line.entry.category || 'General'}</span> {line.entry.recurrence === 1 ? 'Monthly' : line.isDue ? `Due this month (${centsToDecimal(line.priceCents ?? 0)} ${currency})` : `Every ${line.entry.recurrence} months`}</span></div><div className="plan-item-right"><strong><Money cents={line.monthlyCents} currency={currency} /><small> /mo</small></strong><button type="button" disabled={!canJump || line.entry.line < 1} onClick={() => onJump(line.entry.line)} aria-label={`Jump to ${lineName(line)} in financials.toml`}>L{line.entry.line}</button></div></div>)}</div>)}</div>}</section>;
-}
-
-function Kpi({ label, value, sub }: { label: string; value: ReactNode; sub: ReactNode }) {
-  return (
-    <div className="kpi">
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{value}</div>
-      <div className="kpi-sub">{sub}</div>
-    </div>
   );
 }
 
