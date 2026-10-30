@@ -22,7 +22,7 @@
 }
 .budget-inspector * { box-sizing: border-box; }
 .budget-inspector button, .budget-inspector select { font: inherit; }
-.bi-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bi-surface); border-bottom: 1px solid var(--bi-border); }
+.bi-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
 .bi-toolbar select { min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--bi-border); border-radius: 999px; background: var(--bi-subtle); color: var(--bi-text); font-family: var(--bi-mono); font-size: .78rem; font-weight: 700; text-align: center; cursor: pointer; }
 .bi-toolbar select:first-child { margin-right: auto; }
 .bi-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }

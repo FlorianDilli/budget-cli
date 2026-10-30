@@ -98,7 +98,7 @@ export function BudgetPage() {
         </button>
       </div>
     </header>
-    <div className="studio-status" role="status">{!parsed.ok ? 'Invalid draft. Showing the saved budget.' : dirty ? 'Unsaved preview. Save to apply this budget to the app.' : 'Saved budget'}{notice && ` ${notice}`}<span className="studio-status-actions">{legacyDraft !== null && <button type="button" onClick={() => { if (window.confirm('Replace this draft with the previous standalone Budget draft? It remains stored separately in plaintext until you remove it from browser storage.')) { session.setDraft('financials', legacyDraft); setView('editor'); setNotice('Previous standalone draft loaded. Save to encrypt and apply it.'); } }}>Recover old draft</button>}</span></div>
+    {(!parsed.ok || notice || legacyDraft !== null) && <div className="studio-status" role="status">{!parsed.ok && 'Invalid draft. Showing the saved budget.'}{notice && ` ${notice}`}<span className="studio-status-actions">{legacyDraft !== null && <button type="button" onClick={() => { if (window.confirm('Replace this draft with the previous standalone Budget draft? It remains stored separately in plaintext until you remove it from browser storage.')) { session.setDraft('financials', legacyDraft); setView('editor'); setNotice('Previous standalone draft loaded. Save to encrypt and apply it.'); } }}>Recover old draft</button>}</span></div>}
     <div className={`studio-panels studio-${view}`}>
       <div className="studio-editor" hidden={view === 'budget'}>
         <div className="studio-symbols" role="group" aria-label="Editor actions">
@@ -118,9 +118,7 @@ export function BudgetPage() {
       </div>
     </div>
     <footer className="studio-footer">
-      <button type="button" className="icon-button primary" aria-label={saving ? 'Saving' : 'Save'} title={saving ? 'Saving' : 'Save'} disabled={!dirty || !parsed.ok || saving} onClick={() => void save()}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h12l3.5 3.5v13H3.5v-15a1.5 1.5 0 0 1 1.5-1.5Z" /><path d="M7 3.5v6h9v-6M7.5 20v-7h9v7" /></svg>
-      </button>
+      <button type="button" className="primary" disabled={!dirty || !parsed.ok || saving} onClick={() => void save()}>{saving ? 'Saving' : 'Save'}</button>
       <button type="button" disabled={!dirty || saving} onClick={() => { session.setDraft('financials', isSample ? SAMPLE_FINANCIALS : snapshot.financialsToml); setNotice('Draft discarded.'); }}>Discard changes</button>
     </footer>
   </section>

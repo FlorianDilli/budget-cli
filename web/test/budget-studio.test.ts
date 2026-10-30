@@ -92,7 +92,8 @@ describe('native budget studio', () => {
     expect(container.querySelector('.budget-inspector')?.textContent).toContain('Draft salary');
     expect(container.querySelector('.budget-inspector')?.textContent).toContain('+$250.00');
     expect(container.querySelector('[data-testid=shared]')?.textContent).toBe('Saved rent');
-    expect(container.querySelector('[role=status]')?.textContent).toContain('Unsaved preview');
+    expect(container.querySelector('.studio-status')).toBeNull();
+    expect(container.textContent).not.toContain('Unsaved preview');
     expect(button('Save').disabled).toBe(false);
 
     await click(button('Save'));
@@ -103,13 +104,13 @@ describe('native budget studio', () => {
     expect(button('Save').disabled).toBe(true);
   });
 
-  it('shows one preview status for sample budget data', async () => {
+  it('uses the shared preview notice without a duplicate budget status', async () => {
     await render(null, true);
     expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview data is being shown. Save your budget or settings to keep your changes.');
-    expect(container.querySelector('.studio-status')?.textContent).toContain('Unsaved preview');
-    expect(container.querySelectorAll('.studio-status')).toHaveLength(1);
+    expect(container.querySelector('.studio-status')).toBeNull();
+    expect(container.textContent).not.toContain('Unsaved preview');
     expect(container.querySelectorAll('.studio-actions .icon-button')).toHaveLength(2);
-    expect(container.querySelector('.studio-footer .icon-button')?.getAttribute('aria-label')).toBe('Save');
+    expect(container.querySelector('.studio-footer .primary')?.textContent).toBe('Save');
   });
 
   it('shows the saved budget and disables save and source navigation for an invalid draft', async () => {
