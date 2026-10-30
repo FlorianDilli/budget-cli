@@ -83,7 +83,7 @@
 .bi-group-head { color: var(--bi-muted); font-size: .72rem; font-weight: 700; }
 .bi-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--bi-border); background: transparent; color: var(--bi-text); text-align: left; cursor: pointer; }
 .bi-row:disabled { opacity: 1; cursor: default; }
-.bi-row:not(:disabled):hover { background: var(--bi-subtle); }
+.bi-row:not(:disabled):hover { background: var(--bi-subtle); border-color: var(--bi-border); }
 .bi-row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .bi-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .83rem; font-weight: 700; }
 .bi-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--bi-muted); font-size: .66rem; font-weight: 600; }
