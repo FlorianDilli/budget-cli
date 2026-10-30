@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const session = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
-vi.mock('../src/state/session', () => ({ useSession: () => session.value, MIN_PASSWORD_LENGTH: 8 }));
+vi.mock('../src/state/session', () => ({ useSession: () => session.value }));
 import { Settings } from '../src/ui/Settings';
 import { parseSettings } from '../src/domain/config';
 import { SAMPLE_SETTINGS } from '../src/domain/sample';
@@ -46,7 +46,7 @@ async function render() {
 
 const button = (label: string) => Array.from(container.querySelectorAll('button')).find((el) => el.textContent === label) as HTMLButtonElement;
 const field = (label: string) => {
-  const wrapper = Array.from(container.querySelectorAll('label')).find((el) => el.firstChild?.textContent === label);
+  const wrapper = Array.from(container.querySelectorAll('label')).find((el) => el.querySelector('.setting-label')?.firstChild?.textContent === label);
   if (!wrapper) throw new Error(`No field "${label}"`);
   return wrapper.querySelector('input, select') as HTMLInputElement;
 };

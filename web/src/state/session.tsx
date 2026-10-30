@@ -11,7 +11,6 @@ import { SAMPLE_FINANCIALS, SAMPLE_SETTINGS } from '../domain/sample';
 
 export type Status = 'loading' | 'setup' | 'locked' | 'unlocked';
 
-export const MIN_PASSWORD_LENGTH = 8;
 export const AUTO_LOCK_MS = 10 * 60 * 1000;
 
 export interface ImportPreview {
@@ -142,7 +141,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   const setup = useCallback(async (password: string) => {
-    if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     const snap = emptySnapshot(nowIso());
     await persist(() => snap, password);
     passwordRef.current = password;
@@ -241,7 +239,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const changePassword = useCallback(async (currentPw: string, next: string) => {
     if (currentPw !== passwordRef.current) throw new Error('Current password is incorrect');
-    if (next.length < MIN_PASSWORD_LENGTH) throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     await persist((s) => ({ ...s!, savedAt: nowIso() }), next, currentPw);
   }, [snapshot, persist]); // eslint-disable-line react-hooks/exhaustive-deps
 

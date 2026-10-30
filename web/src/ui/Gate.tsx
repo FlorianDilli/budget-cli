@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useSession, MIN_PASSWORD_LENGTH } from '../state/session';
+import { useSession } from '../state/session';
 import { CryptoError } from '../crypto/envelope';
 
 function errorText(e: unknown): string {
@@ -58,7 +58,7 @@ export function SetupScreen() {
           <h2>Set up a new budget</h2>
           <p className="muted small">Your data stays encrypted in this browser. There is no recovery if you forget your password.</p>
           <form onSubmit={submit} className="stack">
-            <label>Password (at least {MIN_PASSWORD_LENGTH} characters)
+            <label>Password
               <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
             </label>
             <label>Confirm password

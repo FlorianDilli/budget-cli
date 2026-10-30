@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes, Navigate } from 'react-router-dom';
+import { NavLink, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { SessionProvider, useSession } from './state/session';
 import { SetupScreen, UnlockScreen } from './ui/Gate';
 import { Overview } from './ui/Overview';
@@ -24,15 +24,17 @@ function Gate() {
 }
 
 const NAV = [
-  { to: '/', label: 'Overview', icon: '◎' },
-  { to: '/transactions', label: 'Transactions', icon: '≡' },
-  { to: '/insights', label: 'Insights', icon: '↗' },
-  { to: '/budget', label: 'Budget', icon: '▤' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
+  { to: '/', label: 'Overview', icon: 'overview' },
+  { to: '/transactions', label: 'Transactions', icon: 'transactions' },
+  { to: '/insights', label: 'Insights', icon: 'insights' },
+  { to: '/budget', label: 'Budget', icon: 'budget' },
+  { to: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 function Shell() {
   const { lock, error, setError, isSample } = useSession();
+  const location = useLocation();
+  const isSettingsGeneral = location.pathname === '/settings' && new URLSearchParams(location.search).get('tab') !== 'data';
   return (
     <div className="shell">
       <header className="topbar">
@@ -45,13 +47,13 @@ function Shell() {
       <nav className="nav" aria-label="Main">
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'}>
-            <span aria-hidden="true">{n.icon}</span>
+            <NavIcon name={n.icon} />
             <span>{n.label}</span>
           </NavLink>
         ))}
       </nav>
       <main className="content">
-        {isSample && <p className="sample-notice">Preview data is being shown. Save your budget or settings to keep your changes.</p>}
+        {isSample && !isSettingsGeneral && <p className="sample-notice">Preview data is being shown. Save your budget or settings to keep your changes.</p>}
         {error && (
           <p className="error" role="alert">
             {error} <button onClick={() => setError(null)}>Dismiss</button>
@@ -67,5 +69,17 @@ function Shell() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+function NavIcon({ name }: { name: string }) {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {name === 'overview' && <><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></>}
+      {name === 'transactions' && <><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r=".8" /><circle cx="4" cy="12" r=".8" /><circle cx="4" cy="18" r=".8" /></>}
+      {name === 'insights' && <><path d="M3.5 19.5h17" /><path d="m5 15 4-4 3 2 6-7" /><path d="M15 6h3v3" /></>}
+      {name === 'budget' && <><rect x="4" y="3.5" width="16" height="17" rx="2" /><path d="M8 3.5v17M4 9h16M12 13h4M12 17h4" /></>}
+      {name === 'settings' && <><circle cx="12" cy="12" r="3" /><path d="M19.4 15.2a1.7 1.7 0 0 0 1.2-1.6v-3.2a1.7 1.7 0 0 0-1.2-1.6l-.8-.3a7 7 0 0 0-.7-1.2l.3-.8a1.7 1.7 0 0 0-.7-2l-2.8-1.6a1.7 1.7 0 0 0-2 .3l-.6.6a7 7 0 0 0-1.4 0l-.6-.6a1.7 1.7 0 0 0-2-.3L5.3 4.5a1.7 1.7 0 0 0-.7 2l.3.8a7 7 0 0 0-.7 1.2l-.8.3a1.7 1.7 0 0 0-1.2 1.6v3.2a1.7 1.7 0 0 0 1.2 1.6l.8.3a7 7 0 0 0 .7 1.2l-.3.8a1.7 1.7 0 0 0 .7 2l2.8 1.6a1.7 1.7 0 0 0 2-.3l.6-.6a7 7 0 0 0 1.4 0l.6.6a1.7 1.7 0 0 0 2 .3l2.8-1.6a1.7 1.7 0 0 0 .7-2l-.3-.8a7 7 0 0 0 .7-1.2z" /></>}
+    </svg>
   );
 }

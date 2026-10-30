@@ -103,16 +103,10 @@ describe('app security and navigation flow', () => {
     await fill(inputs[0], 'short');
     await fill(inputs[1], 'short');
     await click(button('Create encrypted store'));
-    await waitFor(() => container.querySelector('[role=alert]')?.textContent?.includes('at least 8 characters') === true);
-    expect(await readVault()).toBeNull();
-
-    await fill(inputs[0], 'correct password');
-    await fill(inputs[1], 'correct password');
-    await click(button('Create encrypted store'));
     await waitFor(() => container.querySelector('nav[aria-label=Main]') !== null);
     const encrypted = await readVault();
     expect(encrypted).toBeTruthy();
-    expect(encrypted).not.toContain('correct password');
+    expect(encrypted).not.toContain('short');
     expect(encrypted).not.toContain('settingsToml');
 
     const transactions = Array.from(container.querySelectorAll('nav[aria-label=Main] a')).find((a) => a.textContent?.includes('Transactions'));
@@ -133,9 +127,17 @@ describe('app security and navigation flow', () => {
     await act(async () => root.unmount());
     await renderApp();
     await waitFor(() => container.querySelector('input[autocomplete=current-password]') !== null);
-    await fill(container.querySelector<HTMLInputElement>('input[type=password]')!, 'correct password');
+    await fill(container.querySelector<HTMLInputElement>('input[type=password]')!, 'short');
     await click(button('Unlock'));
     await waitFor(() => container.querySelector('nav[aria-label=Main]') !== null);
     expect(container.textContent).toContain('Preview data is being shown');
+    expect(container.querySelectorAll('.nav-icon')).toHaveLength(5);
+    const settingsLink = Array.from(container.querySelectorAll('nav[aria-label=Main] a')).find((a) => a.textContent?.includes('Settings'))!;
+    await click(settingsLink);
+    expect(container.querySelectorAll('.sample-notice')).toHaveLength(1);
+    expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview settings are shown');
+    await click(button('Data'));
+    expect(container.textContent).not.toContain('Currency: EUR');
+    expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview data is being shown');
   }, 15000);
 });

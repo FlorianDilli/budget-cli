@@ -7,8 +7,7 @@ import { centsToDecimal, numberToCents } from '../domain/money';
 import { currentMonth, todayIso, type IsoDate, type YearMonth } from '../domain/dates';
 import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
-import { Card, MonthSelect, currencyOf, dataMonths } from './common';
-import { MIN_PASSWORD_LENGTH } from '../state/session';
+import { Card, InfoButton, MonthSelect, dataMonths } from './common';
 
 const TABS = ['general', 'data'] as const;
 type Tab = (typeof TABS)[number];
@@ -132,21 +131,21 @@ function SettingsForm() {
 
       <Card title="General">
         <div className="settings-grid">
-          <label>Currency symbol
+          <label><span className="setting-label">Currency symbol<InfoButton label="Currency symbol" text="The symbol or code shown beside money amounts, such as €, EUR, or $." /></span>
             <input value={form.currencySymbol} maxLength={8} aria-invalid={!form.currencySymbol.trim()} onChange={(e) => update({ ...form, currencySymbol: e.target.value })} />
           </label>
-          <label>Count totals up to day
+          <label><span className="setting-label">Count totals up to day<InfoButton label="Count totals up to day" text="Choose the day of each month through which transactions are included in totals. Use 0 to include the whole month." /></span>
             <input type="number" min={0} max={31} step={1} value={form.totalMoneyAsOfDay} onChange={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 31) update({ ...form, totalMoneyAsOfDay: n }); }} />
             <span className="muted small">0 counts the whole month.</span>
           </label>
           <label className="check">
             <input type="checkbox" checked={form.roundAmounts} onChange={(e) => update({ ...form, roundAmounts: e.target.checked })} />
-            Round amounts to whole units
+            <span className="setting-label">Round amounts to whole units<InfoButton label="Round amounts" text="When enabled, displayed totals are rounded to whole currency units instead of showing cents." /></span>
           </label>
         </div>
       </Card>
 
-      <Card title="Import formats">
+      <Card title="Import formats" info="Each format describes the columns and number/date conventions used by a bank CSV export. Add one format for each bank export layout you import.">
         <p className="muted small">Describe how bank CSV exports are read. Each format is matched when you import a file.</p>
         {form.formats.length === 0 && <p className="muted">No formats yet.</p>}
         {form.formats.map((format, index) => {
@@ -154,36 +153,36 @@ function SettingsForm() {
           return (
             <section className="format-card" key={index} aria-label={`Format ${index + 1}`}>
               <div className="settings-grid">
-                <label>Name
+                <label><span className="setting-label">Name<InfoButton label="Format name" text="A short name to identify this bank export format when importing a CSV." /></span>
                   <input value={format.name} aria-invalid={!format.name.trim()} onChange={(e) => patchFormat(index, { name: e.target.value })} />
                 </label>
-                <label>Date column
+                <label><span className="setting-label">Date column<InfoButton label="Date column" text="Enter the CSV header containing each transaction date." /></span>
                   <input value={format.dateColumn} aria-invalid={!format.dateColumn.trim()} onChange={(e) => patchFormat(index, { dateColumn: e.target.value })} />
                 </label>
-                <label>Amount column
+                <label><span className="setting-label">Amount column<InfoButton label="Amount column" text="Enter the CSV header containing the transaction amount. Use one amount column for income and expenses." /></span>
                   <input value={format.amountColumn} aria-invalid={!format.amountColumn.trim()} onChange={(e) => patchFormat(index, { amountColumn: e.target.value })} />
                 </label>
-                <label>Description column
+                <label><span className="setting-label">Description column<InfoButton label="Description column" text="Optional CSV header containing the transaction description or payee." /></span>
                   <input value={format.descriptionColumn ?? ''} onChange={(e) => patchFormat(index, { descriptionColumn: e.target.value || undefined })} />
                 </label>
-                <label>Reference column
+                <label><span className="setting-label">Reference column<InfoButton label="Reference column" text="Optional CSV header containing a bank reference or transaction identifier." /></span>
                   <input value={format.referenceColumn ?? ''} onChange={(e) => patchFormat(index, { referenceColumn: e.target.value || undefined })} />
                 </label>
-                <label>Date format
+                <label><span className="setting-label">Date format<InfoButton label="Date format" text="Optional date pattern for this bank export, for example %Y-%m-%d. Leave blank to use automatic parsing." /></span>
                   <input value={format.dateFormat ?? ''} placeholder="%Y-%m-%d" onChange={(e) => patchFormat(index, { dateFormat: e.target.value || undefined })} />
                 </label>
-                <label>Delimiter
+                <label><span className="setting-label">Delimiter<InfoButton label="Delimiter" text="Select the character that separates fields in each CSV row. Choose Custom when the bank uses another delimiter." /></span>
                   <select value={format.delimiter} onChange={(e) => patchFormat(index, { delimiter: e.target.value })}>
                     {delimiters.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
                   </select>
                 </label>
-                <label>Decimal separator
+                <label><span className="setting-label">Decimal separator<InfoButton label="Decimal separator" text="Choose the character used between whole currency units and cents in the amount column." /></span>
                   <select value={format.decimalSeparator} onChange={(e) => patchFormat(index, { decimalSeparator: e.target.value })}>
                     <option value=".">Period (.)</option>
                     <option value=",">Comma (,)</option>
                   </select>
                 </label>
-                <label>Thousands separator
+                <label><span className="setting-label">Thousands separator<InfoButton label="Thousands separator" text="Choose the character used to group thousands in the amount column, or None if amounts are not grouped." /></span>
                   <select value={format.thousandsSeparator} onChange={(e) => patchFormat(index, { thousandsSeparator: e.target.value })}>
                     {THOUSANDS.filter((t) => t.value !== format.decimalSeparator).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
@@ -199,11 +198,11 @@ function SettingsForm() {
                       ? { balanceSnapshot: 0, balanceSnapshotDate: todayIso(new Date()) }
                       : { balanceSnapshot: undefined, balanceSnapshotDate: undefined })}
                   />
-                  Set an opening balance from this export
+                  <span className="setting-label">Set an opening balance from this export<InfoButton label="Opening balance" text="Use this CSV's balance snapshot to establish the account balance at the selected date." /></span>
                 </label>
                 {format.balanceSnapshot !== undefined && format.balanceSnapshotDate && (
                   <>
-                    <label>Balance
+                    <label><span className="setting-label">Balance<InfoButton label="Opening balance amount" text="Enter the account balance represented by the imported statement." /></span>
                       <input
                         type="number"
                         step="0.01"
@@ -217,7 +216,7 @@ function SettingsForm() {
                         }}
                       />
                     </label>
-                    <label>Balance date
+                    <label><span className="setting-label">Balance date<InfoButton label="Opening balance date" text="Set the date the opening balance applies to." /></span>
                       <input type="date" value={format.balanceSnapshotDate} onChange={(e) => { if (e.target.value) patchFormat(index, { balanceSnapshotDate: e.target.value as IsoDate }); }} />
                     </label>
                   </>
@@ -246,7 +245,7 @@ function SettingsForm() {
 
 function DataTab() {
   const session = useSession();
-  const { snapshot, settings, financials } = session;
+  const { snapshot, financials } = session;
   const now = useMemo(() => new Date(), []);
   const months = useMemo(() => (snapshot ? dataMonths(snapshot, financials, now) : []), [snapshot, financials, now]);
   if (!snapshot) return null;
@@ -257,8 +256,8 @@ function DataTab() {
       <DeleteMonthCard months={months} />
       <PasswordCard />
       <ResetCard />
-      <Card title="Lock">
-        <p className="muted">The app locks automatically after 10 minutes without interaction. Currency: {currencyOf(settings)}.</p>
+      <Card title="Lock" info="Lock immediately to hide your budget. The app also locks automatically after 10 minutes without interaction.">
+        <p className="muted">The app locks automatically after 10 minutes without interaction.</p>
         <button onClick={session.lock}>Lock now</button>
       </Card>
     </div>
@@ -281,7 +280,7 @@ function ExportCard() {
     }
   };
   return (
-    <Card title="Export backup">
+    <Card title="Export backup" info="Downloads an encrypted .budget backup that can be restored in this browser or another browser. It uses your current password.">
       <p className="muted">Encrypted .budget file with the same contents as local data. Original CSVs are not included.</p>
       <button className="primary" onClick={run}>Download .budget</button>
     </Card>
@@ -338,7 +337,7 @@ function RestoreCard({ localSavedAt }: { localSavedAt: string }) {
   const olderWarning = backup !== null && !!backup.savedAt && !!localSavedAt && backup.savedAt < localSavedAt;
 
   return (
-    <Card title="Restore backup">
+    <Card title="Restore backup" info="Choose an encrypted .budget backup and enter its password to inspect it. Your local data is only replaced after you confirm the restore.">
       <p className="muted">Replaces local data after confirmation. The file is verified before any local data changes.</p>
       <input type="file" accept=".budget,application/json" onChange={onFile} aria-label="Choose .budget file" />
       {text && !backup && (
@@ -372,7 +371,7 @@ function DeleteMonthCard({ months }: { months: YearMonth[] }) {
     setMsg(`Deleted ${n} transaction(s) for ${ym}.`);
   };
   return (
-    <Card title="Delete a month">
+    <Card title="Delete a month" info="Permanently removes imported transactions for the selected month. Recurring entries and settings are not changed.">
       <p className="muted">Removes imported transactions for one month. Settings and financials are unchanged.</p>
       <MonthSelect months={months} value={ym} onChange={setYm} label="Month" />
       <button className="danger" onClick={run}>Delete transactions</button>
@@ -399,10 +398,10 @@ function PasswordCard() {
     setCur(''); setNext(''); setConfirm('');
   };
   return (
-    <Card title="Change password">
+    <Card title="Change password" info="Enter your current password, then choose and confirm any non-empty new password. Your encrypted data is re-encrypted with it.">
       <form onSubmit={submit} className="stack">
         <input type="password" placeholder="Current password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required />
-        <input type="password" placeholder={`New password (min ${MIN_PASSWORD_LENGTH})`} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
+        <input type="password" placeholder="New password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
         <input type="password" placeholder="Confirm new password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
         <button type="submit">Change password</button>
       </form>
@@ -415,7 +414,7 @@ function ResetCard() {
   const { resetAll } = useSession();
   const [word, setWord] = useState('');
   return (
-    <Card title="Reset everything">
+    <Card title="Reset everything" info="Permanently deletes all encrypted local data in this browser. Download a backup first if you want to keep your budget.">
       <p className="warn">Deletes all encrypted local data in this browser. Download a backup first.</p>
       <input value={word} onChange={(e) => setWord(e.target.value)} placeholder='Type "RESET" to confirm' aria-label="Reset confirmation" />
       <button className="danger" disabled={word !== 'RESET'} onClick={() => void resetAll()}>Reset all data</button>

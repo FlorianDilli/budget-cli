@@ -9,12 +9,23 @@ export function Money({ cents, currency, className }: { cents: Cents; currency: 
   return <span className={cls}>{`${centsToDecimal(cents)} ${currency}`}</span>;
 }
 
-export function Card({ title, children, wide }: { title?: string; children: ReactNode; wide?: boolean }) {
+export function Card({ title, children, wide, info }: { title?: string; children: ReactNode; wide?: boolean; info?: string }) {
   return (
     <section className={wide ? 'card wide' : 'card'}>
-      {title && <h2>{title}</h2>}
+      {title && <header className="card-title"><h2>{title}</h2>{info && <InfoButton label={title} text={info} />}</header>}
       {children}
     </section>
+  );
+}
+
+export function InfoButton({ label, text }: { label: string; text: string }) {
+  return (
+    <details className="info-tip">
+      <summary aria-label={`More about ${label}`} title={`More about ${label}`}>
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7v4M8 4.8h.01" /></svg>
+      </summary>
+      <p>{text}</p>
+    </details>
   );
 }
 
