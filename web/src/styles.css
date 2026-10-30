@@ -151,8 +151,10 @@ tbody tr { cursor: default; }
 .toml-editor .cm-editor { min-height: 320px; max-height: 70vh; font-family: var(--mono); font-size: 13px; }
 .toml-editor .cm-scroller { overflow: auto; }
 .toml-editor .cm-editor.cm-focused { outline: none; }
-.subtabs { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.subtabs button.active { background: var(--accent); color: #11140e; border-color: transparent; }
+/* Section tabs: the only sub-navigation control. See docs/navigation.md. */
+.section-tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); max-width: 100%; overflow-x: auto; }
+.section-tabs button { flex-shrink: 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.section-tabs button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
 .budget { display: flex; flex-direction: column; gap: 1rem; }
 
 @media (min-width: 900px) {
@@ -185,10 +187,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .kpi { padding: 1.1rem; }
 .kpi-label { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: .68rem; }
 .kpi-value { font-size: 1.45rem; font-weight: 800; letter-spacing: -.04em; }
-.subtabs { background: var(--surface); padding: 4px; border: 1px solid var(--border); border-radius: 12px; }
-.subtabs button { border: 0; font-weight: 700; font-size: .82rem; }
-.editor-view { margin-bottom: .7rem; }
-.editor-view button.active { background: var(--accent); color: #11140e; border-color: transparent; }
 .editor-grid.single { grid-template-columns: 1fr; }
 .editor-grid > div { min-width: 0; }
 .pane { padding: 1rem; height: 100%; }
@@ -301,12 +299,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 
 /* Editor studio: compact controls and a continuous code canvas. */
 .settings-page > div { min-width: 0; }
-.settings-page .subtabs, .editor-view { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
-.settings-page .subtabs button, .editor-view button { border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 700; }
-.settings-page .subtabs button.active, .editor-view button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
 .editor-studio { display: flex; flex-direction: column; gap: .7rem; }
 .editor-studio > .warn { margin: 0; }
-.editor-view { align-self: flex-start; margin: 0; }
 .editor-grid { gap: .75rem; }
 .editor-grid > div { min-width: 0; }
 .editor-grid .pane { gap: 0; padding: 0; overflow: hidden; border-radius: 10px; }
@@ -335,8 +329,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .editor-stats { margin-left: auto; color: var(--muted); font-weight: 600; white-space: nowrap; }
 @media (max-width: 599px) {
   .settings-page .page-head { align-items: flex-start; }
-  .editor-view { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
-  .editor-view button { white-space: nowrap; }
   .editor-actions { gap: .3rem; }
   .editor-grid .toml-editor .cm-editor { min-height: 320px; }
   .editor-stats { margin-left: 0; }

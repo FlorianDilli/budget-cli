@@ -2,6 +2,7 @@
 import { act, createElement, forwardRef, useImperativeHandle, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { parseFinancials } from '../src/domain/config';
 
 const mocks = vi.hoisted(() => ({ session: {} as Record<string, unknown>, jump: vi.fn(), insert: vi.fn() }));
@@ -44,7 +45,7 @@ async function render(initialDraft: string | null = null) {
       snapshot: { financialsToml: savedText }, financials: parsed(savedText), settings: { currencySymbol: 'USD' },
       drafts: { financials: draftText, settings: null }, isSample: false, setDraft, saveFinancials,
     };
-    return createElement('div', null, createElement(BudgetPage), createElement('output', { 'data-testid': 'shared' }, parsed(savedText).recurring[0]?.description));
+    return createElement(MemoryRouter, null, createElement('div', null, createElement(BudgetPage), createElement('output', { 'data-testid': 'shared' }, parsed(savedText).recurring[0]?.description)));
   }
   await act(async () => root.render(createElement(Harness)));
 }

@@ -4,14 +4,24 @@ import { SAMPLE_FINANCIALS } from '../domain/sample';
 import { useSession } from '../state/session';
 import { BudgetInspector } from './BudgetInspector';
 import { TomlEditor, type TomlEditorHandle } from './TomlEditor';
+import { SectionTabs, useSectionParam, type SectionItem } from './SectionTabs';
 import './budget-studio.css';
 
 const symbols = ['[', ']', '[[', ']]', '{', '}', '"', "'", '=', '#', ',', 'Tab'];
+type View = 'editor' | 'split' | 'budget';
+const VIEWS = ['editor', 'split', 'budget'] as const;
+const VIEW_ITEMS = [
+  { id: 'editor', label: 'Editor' },
+  { id: 'split', label: 'Split' },
+  { id: 'budget', label: 'Visual Budget' },
+] as const satisfies readonly SectionItem<View>[];
 
 export function BudgetPage() {
   const session = useSession();
   const { snapshot, financials, drafts, isSample } = session;
-  const [view, setView] = useState<'editor' | 'split' | 'budget'>(() => window.innerWidth < 900 ? 'budget' : 'split');
+  // Narrow screens default to the visual budget because the split layout does not fit.
+  const [defaultView] = useState<View>(() => (window.innerWidth < 900 ? 'budget' : 'split'));
+  const [view, setView] = useSectionParam<View>('view', VIEWS, defaultView);
   const [wrap, setWrap] = useState(true);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -71,9 +81,7 @@ export function BudgetPage() {
 
   return <section className={`budget-studio${view === 'budget' ? ' is-budget' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
     <header className="studio-header">
-      <nav className="studio-tabs" aria-label="Budget view">
-        {(['editor', 'split', 'budget'] as const).map((mode) => <button type="button" key={mode} className={view === mode ? 'active' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === 'editor' ? 'Editor' : mode === 'split' ? 'Split' : 'Visual Budget'}</button>)}
-      </nav>
+      <SectionTabs items={VIEW_ITEMS} value={view} onChange={setView} label="Budget view" />
       <div className="studio-actions">
         <button type="button" onClick={() => fileInput.current?.click()}>Open</button>
         <input ref={fileInput} type="file" accept=".toml,.txt,text/plain" hidden onChange={onFile} aria-label="Open financials TOML" />

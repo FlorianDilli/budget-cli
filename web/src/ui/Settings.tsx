@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { SectionTabs, useSectionParam, type SectionItem } from './SectionTabs';
 import { useSession, type SaveResult } from '../state/session';
 import { TomlEditor, type TomlEditorHandle } from './TomlEditor';
 import { parseSettings, type ValidationIssue, type Parsed } from '../domain/config';
@@ -12,23 +12,18 @@ import { MIN_PASSWORD_LENGTH } from '../state/session';
 
 const TABS = ['editor', 'data'] as const;
 type Tab = (typeof TABS)[number];
+const TAB_ITEMS = [
+  { id: 'editor', label: 'Editor' },
+  { id: 'data', label: 'Data' },
+] as const satisfies readonly SectionItem<Tab>[];
 
 export function Settings() {
-  const [params, setParams] = useSearchParams();
-  const raw = params.get('tab');
-  const tab: Tab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as Tab) : 'editor';
-  const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
+  const [tab, setTab] = useSectionParam<Tab>('tab', TABS, 'editor');
   return (
     <div className="page settings-page">
       <header className="page-head">
         <h1>Settings</h1>
-        <nav className="subtabs" aria-label="Settings sections">
-          {TABS.map((t) => (
-            <button key={t} type="button" className={t === tab ? 'active' : ''} aria-pressed={t === tab} onClick={() => setTab(t)}>
-              {t === 'editor' ? 'Editor' : 'Data'}
-            </button>
-          ))}
-        </nav>
+        <SectionTabs items={TAB_ITEMS} value={tab} onChange={setTab} label="Settings sections" />
       </header>
       <div hidden={tab !== 'editor'}><EditorTab /></div>
       {tab === 'data' && <DataTab />}
