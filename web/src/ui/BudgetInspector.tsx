@@ -8,6 +8,7 @@ import './budget-inspector.css';
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fullMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const colors = ['#ef4444', '#f97316', '#eab308', '#6366f1', '#a855f7', '#0ea5e9', '#ec4899'];
+const prefersDark = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 const darkColors = ['#f87171', '#fb923c', '#facc15', '#818cf8', '#c084fc', '#38bdf8', '#f472b6'];
 const ymOf = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
 const sum = (lines: PlanLine[]) => lines.reduce((total, line) => total + line.monthlyCents, 0);
@@ -22,6 +23,7 @@ export interface BudgetInspectorProps {
 export function BudgetInspector({ financials, onSourceLineClick }: BudgetInspectorProps) {
   const { settings } = useSession();
   const [today] = useState(() => new Date());
+  const palette = prefersDark() ? darkColors : colors;
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [sort, setSort] = useState<'amount' | 'category'>('amount');
@@ -51,11 +53,11 @@ export function BudgetInspector({ financials, onSourceLineClick }: BudgetInspect
   const cash = financials.cash.filter((entry) => entry.date <= monthLast(ymOf(year, month))).reduce<typeof financials.cash[number] | null>((latest, entry) => !latest || entry.date >= latest.date ? entry : latest, null);
   const categoryTotals = new Map<string, number>();
   for (const line of expenses) categoryTotals.set(categoryOf(line), (categoryTotals.get(categoryOf(line)) || 0) - line.monthlyCents);
-  const categoryColors = new Map([...categoryTotals].sort((a, b) => b[1] - a[1]).map(([category], i) => [category, colors[i % colors.length]]));
+  const categoryColors = new Map([...categoryTotals].sort((a, b) => b[1] - a[1]).map(([category], i) => [category, palette[i % palette.length]]));
 
   const row = (line: PlanLine) => {
     const entry = line.entry;
-    const color = line.monthlyCents < 0 ? categoryColors.get(categoryOf(line)) || colors[0] : '#15803d';
+    const color = line.monthlyCents < 0 ? categoryColors.get(categoryOf(line)) || palette[0] : '#15803d';
     const note = entry.recurrence === 1 ? 'Monthly' : line.isDue ? `Due (${money(line.priceCents || 0)})` : entry.paymentMonths.length ? `Paid in ${entry.paymentMonths.map((m) => months[m - 1]).join(', ')} (${money(line.priceCents || 0)})` : `Every ${entry.recurrence} months`;
     return <button type="button" className="bi-row" key={entry.index} onClick={() => onSourceLineClick?.(entry.line)} disabled={!onSourceLineClick || entry.line < 1} title={entry.description}>
       <span className="bi-row-left"><span className="bi-row-title">{nameOf(line)}</span><span className="bi-meta"><span className="bi-badge" style={{ color, borderColor: color }}>{categoryOf(line)}</span><span className={line.isDue && entry.recurrence > 1 ? 'bi-due' : ''}>{note}</span></span></span>
@@ -96,7 +98,6 @@ export function BudgetInspector({ financials, onSourceLineClick }: BudgetInspect
   </section>;
 }
 
-const prefersDark = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 
 function Cashflow({ income, expenses, currency, month }: { income: PlanLine[]; expenses: PlanLine[]; currency: (cents: number) => string; month: string }) {
   const uid = useId().replace(/:/g, '');

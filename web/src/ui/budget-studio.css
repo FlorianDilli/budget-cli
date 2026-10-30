@@ -9,7 +9,8 @@
   border-radius: 10px;
   font-family: 'Plus Jakarta Sans', var(--font);
 }
-.budget-studio.is-budget { background: transparent; border: 0; border-radius: 0; }
+.budget-studio.is-budget { height: auto; overflow: visible; background: transparent; border: 0; border-radius: 0; }
+.budget-studio.is-budget .studio-panels { flex: none; overflow: visible; }
 .studio-status-actions { display: flex; gap: 6px; margin-left: auto; }
 .studio-status-actions button { padding: 2px 8px; font-size: .72rem; }
 .studio-panels { background: transparent; }
