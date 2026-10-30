@@ -1,5 +1,5 @@
 import { parseToml, findTableLines } from './toml';
-import { numberToCents, type Cents } from './money';
+import { centsToDecimal, numberToCents, type Cents } from './money';
 import { parseFinancialDate, parseIsoDate, type IsoDate } from './dates';
 
 export interface ValidationIssue {
@@ -133,6 +133,29 @@ export function parseSettings(text: string): Parsed<Settings> {
   });
 
   return issues.length ? { ok: false, issues } : { ok: true, value: settings };
+}
+
+/** Writes settings as TOML that `parseSettings` reads back to the same value. */
+export function serializeSettings(s: Settings): string {
+  const q = (v: string) => JSON.stringify(v);
+  const lines = [
+    '[user]',
+    `currency_symbol = ${q(s.currencySymbol)}`,
+    `round_amounts = ${s.roundAmounts}`,
+    `total_money_as_of_day = ${s.totalMoneyAsOfDay}`,
+  ];
+  for (const f of s.formats) {
+    lines.push('', '[[importer.formats]]', `name = ${q(f.name)}`, `date_column = ${q(f.dateColumn)}`, `amount_column = ${q(f.amountColumn)}`);
+    if (f.descriptionColumn) lines.push(`description_column = ${q(f.descriptionColumn)}`);
+    if (f.referenceColumn) lines.push(`reference_column = ${q(f.referenceColumn)}`);
+    lines.push(`delimiter = ${q(f.delimiter)}`, `decimal_separator = ${q(f.decimalSeparator)}`);
+    if (f.thousandsSeparator) lines.push(`thousands_separator = ${q(f.thousandsSeparator)}`);
+    if (f.dateFormat) lines.push(`date_format = ${q(f.dateFormat)}`);
+    if (f.balanceSnapshot !== undefined && f.balanceSnapshotDate) {
+      lines.push(`balance_snapshot = ${centsToDecimal(f.balanceSnapshot)}`, `balance_snapshot_date = ${q(f.balanceSnapshotDate)}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 // ---------------------------------------------------------------- financials.toml

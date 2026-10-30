@@ -79,9 +79,13 @@ export function BudgetPage() {
     URL.revokeObjectURL(url);
   };
 
-  return <section className={`budget-studio${view === 'budget' ? ' is-budget' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
-    <header className="studio-header">
+  return <div className="page budget-page">
+    <header className="page-head budget-page-head">
+      <h1>Budget</h1>
       <SectionTabs items={VIEW_ITEMS} value={view} onChange={setView} label="Budget view" />
+    </header>
+  <section className={`budget-studio${view === 'budget' ? ' is-budget' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop} aria-label="Budget studio">
+    <header className="studio-header">
       <div className="studio-actions">
         <button type="button" onClick={() => fileInput.current?.click()}>Open</button>
         <input ref={fileInput} type="file" accept=".toml,.txt,text/plain" hidden onChange={onFile} aria-label="Open financials TOML" />
@@ -108,5 +112,6 @@ export function BudgetPage() {
         <BudgetInspector financials={display} onSourceLineClick={parsed.ok ? (line) => { setView(view === 'split' ? 'split' : 'editor'); setJump({ line }); } : undefined} />
       </div>
     </div>
-  </section>;
+  </section>
+  </div>;
 }

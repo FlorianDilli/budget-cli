@@ -94,6 +94,8 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .gate { max-width: 420px; margin: 12vh auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
 .gate form { display: flex; flex-direction: column; gap: 0.75rem; }
 .gate .warn { margin: 0; }
+.gate-brand { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; text-align: center; }
+.gate-logo { display: block; width: 112px; height: 112px; }
 
 .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr; }
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); }
@@ -351,3 +353,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .nav a > span:first-child { font-size: 1rem; }
   .nav a.active { border-left-color: var(--accent); border-top-color: transparent; }
 }
+
+/* Settings form: visual replacement for settings.toml. */
+.settings-form { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.settings-form .error-banner ul { margin: 0; padding-left: 1.1rem; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem 1rem; align-items: end; }
+.settings-grid label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; font-weight: 700; min-width: 0; }
+.settings-grid label.check { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 600; }
+.settings-grid input[aria-invalid='true'] { border-color: var(--err); }
+.format-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.9rem; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.format-actions { display: flex; justify-content: flex-end; }
+.settings-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }

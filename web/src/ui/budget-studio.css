@@ -1,7 +1,7 @@
 .budget-studio {
   display: flex;
   flex-direction: column;
-  height: max(600px, calc(100dvh - 10rem));
+  height: max(600px, calc(100dvh - 13rem));
   min-width: 0;
   overflow: hidden;
   background: var(--surface);
@@ -14,7 +14,7 @@
 .studio-status-actions { display: flex; gap: 6px; margin-left: auto; }
 .studio-status-actions button { padding: 2px 8px; font-size: .72rem; }
 .studio-panels { background: transparent; }
-.studio-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.studio-header { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 52px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .studio-actions { display: flex; gap: 5px; }
 .studio-actions button { border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
 .studio-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; padding: 5px 12px; background: var(--bg); border-bottom: 1px solid var(--border); color: var(--muted); font-size: .73rem; }
@@ -43,6 +43,7 @@
 
 /* Visual Budget uses the full screen width on mobile; no inner side gutters or horizontal overflow. */
 .content:has(.budget-studio.is-budget) { padding-left: 0; padding-right: 0; max-width: none; }
+.content:has(.budget-studio.is-budget) .budget-page-head { padding-inline: 12px; }
 .budget-studio.is-budget { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: hidden; }
 .budget-studio.is-budget .studio-header,
 .budget-studio.is-budget .studio-status { padding-left: 12px; padding-right: 12px; }

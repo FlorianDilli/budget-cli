@@ -1,185 +1,244 @@
-import { useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { SectionTabs, useSectionParam, type SectionItem } from './SectionTabs';
 import { useSession, type SaveResult } from '../state/session';
-import { TomlEditor, type TomlEditorHandle } from './TomlEditor';
-import { parseSettings, type ValidationIssue, type Parsed } from '../domain/config';
+import { DEFAULT_SETTINGS, parseSettings, serializeSettings, type ImportFormat, type Settings } from '../domain/config';
 import { SAMPLE_SETTINGS } from '../domain/sample';
-import { currentMonth, type YearMonth } from '../domain/dates';
+import { centsToDecimal, numberToCents } from '../domain/money';
+import { currentMonth, todayIso, type IsoDate, type YearMonth } from '../domain/dates';
 import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
 import { Card, MonthSelect, currencyOf, dataMonths } from './common';
 import { MIN_PASSWORD_LENGTH } from '../state/session';
 
-const TABS = ['editor', 'data'] as const;
+const TABS = ['general', 'data'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_ITEMS = [
-  { id: 'editor', label: 'Editor' },
+  { id: 'general', label: 'General' },
   { id: 'data', label: 'Data' },
 ] as const satisfies readonly SectionItem<Tab>[];
 
 export function Settings() {
-  const [tab, setTab] = useSectionParam<Tab>('tab', TABS, 'editor');
+  const [tab, setTab] = useSectionParam<Tab>('tab', TABS, 'general');
   return (
     <div className="page settings-page">
       <header className="page-head">
         <h1>Settings</h1>
         <SectionTabs items={TAB_ITEMS} value={tab} onChange={setTab} label="Settings sections" />
       </header>
-      <div hidden={tab !== 'editor'}><EditorTab /></div>
+      {tab === 'general' && <SettingsForm />}
       {tab === 'data' && <DataTab />}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ Editor
+// ------------------------------------------------------------------ General
 
-function EditorTab() {
-  const { snapshot, isSample } = useSession();
-  if (!snapshot) return null;
-  return (
-    <div className="editor-studio">
-      {isSample && <p className="warn">Sample content is shown as a draft. It is not saved until you press Save.</p>}
-      <div className="editor-grid single">
-        <EditorPane
-          kind="settings"
-          fileName="settings.toml"
-          savedText={snapshot.settingsToml}
-          sample={SAMPLE_SETTINGS}
-          isSample={isSample}
-          parse={parseSettings}
-        />
-      </div>
-    </div>
-  );
+function readSettings(text: string): Settings {
+  const parsed = parseSettings(text);
+  return parsed.ok ? parsed.value : DEFAULT_SETTINGS;
 }
 
-const SYMBOLS = ['[', ']', '[[', ']]', '{', '}', '"', "'", '=', '#', ',', 'Tab'];
+/** Messages that block saving: the form's own rules plus whatever the stored-format parser rejects. */
+function formIssues(form: Settings): string[] {
+  const messages: string[] = [];
+  if (!form.currencySymbol.trim()) messages.push('Currency symbol is required.');
+  const parsed = parseSettings(serializeSettings(form));
+  if (!parsed.ok) messages.push(...parsed.issues.map((issue) => issue.message));
+  return messages;
+}
 
-function EditorPane<T>({
-  kind,
-  fileName,
-  savedText,
-  sample,
-  isSample,
-  parse,
-}: {
-  kind: 'settings';
-  fileName: string;
-  savedText: string;
-  sample: string;
-  isSample: boolean;
-  parse: (text: string) => Parsed<T>;
-}) {
+const DELIMITERS = [
+  { value: ',', label: 'Comma (,)' },
+  { value: ';', label: 'Semicolon (;)' },
+  { value: '\t', label: 'Tab' },
+  { value: '|', label: 'Pipe (|)' },
+];
+const THOUSANDS = [
+  { value: '', label: 'None' },
+  { value: ',', label: 'Comma (,)' },
+  { value: '.', label: 'Period (.)' },
+  { value: ' ', label: 'Space' },
+  { value: "'", label: "Apostrophe (')" },
+];
+
+function SettingsForm() {
   const session = useSession();
-  const draft = session.drafts[kind] ?? (isSample ? sample : savedText);
-  const setDraft = (text: string) => session.setDraft(kind, text);
-  const [issues, setIssues] = useState<ValidationIssue[]>([]);
-  const [wrap, setWrap] = useState(true);
+  const { snapshot, isSample, drafts, setDraft, saveSettings } = session;
+  const savedText = snapshot?.settingsToml ?? '';
+  const originalText = isSample ? SAMPLE_SETTINGS : savedText;
+  const baseText = drafts.settings ?? originalText;
+  const [form, setForm] = useState<Settings>(() => readSettings(baseText));
   const [notice, setNotice] = useState<string | null>(null);
-  const ref = useRef<TomlEditorHandle>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
+  // The text this form last wrote to the session draft. Anything else means an outside change (discard, reload).
+  const pushed = useRef(baseText);
 
-  const live = useMemo(() => parse(draft), [draft, parse]);
-  const liveIssues: ValidationIssue[] = live.ok ? [] : live.issues;
-  const shownIssues = issues.length ? issues : liveIssues;
-  const dirty = draft !== (isSample ? '' : savedText);
-  const saved = isSample ? false : savedText === draft;
+  useEffect(() => {
+    if (baseText !== pushed.current) {
+      pushed.current = baseText;
+      setForm(readSettings(baseText));
+    }
+  }, [baseText]);
 
-  const save = async () => {
+  const stored = parseSettings(savedText);
+  const issues = formIssues(form);
+  const valid = issues.length === 0;
+  const text = serializeSettings(form);
+  const dirty = isSample || text !== serializeSettings(readSettings(savedText));
+
+  const update = (next: Settings) => {
+    setForm(next);
     setNotice(null);
-    const res: SaveResult = await session.saveSettings(draft);
-    if (!res.ok) {
-      setIssues(res.issues);
-      setNotice('Not saved. The last valid version stays active.');
-    } else {
-      setIssues([]);
-      setNotice('Saved and applied.');
+    const nextText = serializeSettings(next);
+    if (parseSettings(nextText).ok && next.currencySymbol.trim()) {
+      pushed.current = nextText;
+      setDraft('settings', nextText);
     }
   };
 
+  const save = async () => {
+    if (!valid) return;
+    setNotice(null);
+    const result: SaveResult = await saveSettings(text);
+    setNotice(result.ok ? 'Saved and applied.' : 'Not saved. Fix the errors first.');
+  };
+
   const discard = () => {
-    setDraft(isSample ? sample : savedText);
-    setIssues([]);
+    pushed.current = originalText;
+    setDraft('settings', originalText);
+    setForm(readSettings(originalText));
     setNotice(null);
   };
 
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([draft], { type: 'text/plain;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const patchFormat = (index: number, patch: Partial<ImportFormat>) =>
+    update({ ...form, formats: form.formats.map((f, i) => (i === index ? { ...f, ...patch } : f)) });
 
-  const readInto = async (file: File) => {
-    const text = await file.text();
-    setDraft(text);
-    setIssues([]);
-    setNotice(`Loaded ${file.name} into the editor (not saved)`);
-  };
+  const addFormat = () =>
+    update({
+      ...form,
+      formats: [...form.formats, { name: `Format ${form.formats.length + 1}`, dateColumn: '', amountColumn: '', descriptionColumn: '', delimiter: ',', decimalSeparator: '.', thousandsSeparator: '' }],
+    });
 
-  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = '';
-    if (f) void readInto(f);
-  };
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files?.[0];
-    if (f) void readInto(f);
-  };
-
-  const firstIssue = shownIssues[0];
+  const removeFormat = (index: number) => update({ ...form, formats: form.formats.filter((_, i) => i !== index) });
 
   return (
-    <section className="pane" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-      <header className="pane-head">
-        <h2>{fileName}</h2>
-        <span className={`state ${dirty ? 'dirty' : saved ? 'clean' : ''}`}>
-          {isSample ? 'Sample (unsaved)' : dirty ? 'Unsaved draft' : 'Saved'}
-        </span>
-      </header>
-
-      <div className="toolbar editor-actions" role="group" aria-label={`${fileName} actions`}>
-        <button type="button" onClick={() => ref.current?.undo()}>Undo</button>
-        <button type="button" onClick={() => ref.current?.redo()}>Redo</button>
-        <button type="button" onClick={() => ref.current?.search()}>Search</button>
-        <label className="check"><input type="checkbox" checked={wrap} onChange={(e) => setWrap(e.target.checked)} /> Wrap</label>
-        <button type="button" onClick={() => fileInput.current?.click()}>Open</button>
-        <input ref={fileInput} type="file" accept=".toml,text/plain" hidden onChange={onPick} aria-label={`Open ${fileName}`} />
-        <button type="button" className="download-button" onClick={download} title="Download the displayed draft as a plaintext TOML file">Download</button>
-      </div>
-      <div className="toolbar editor-symbols" role="group" aria-label={`${fileName} quick actions`}>
-        <button type="button" onClick={() => { setDraft(''); setIssues([]); }}>Clear</button>
-        <button type="button" onClick={() => navigator.clipboard?.writeText(draft)}>Copy</button>
-        {SYMBOLS.map((s) => (
-          <button key={s} type="button" className="sym" aria-label={s === 'Tab' ? 'Insert tab' : `Insert ${s}`} onClick={() => ref.current?.insert(s === 'Tab' ? '\t' : s)}>{s}</button>
-        ))}
-      </div>
-
-      {firstIssue && (
+    <div className="settings-form">
+      {isSample && <p className="warn">Sample settings are shown. Save to keep them.</p>}
+      {!stored.ok && !isSample && <p className="warn">The saved settings could not be read ({stored.issues[0]?.message}). Showing defaults until you save.</p>}
+      {issues.length > 0 && (
         <div className="error-banner" role="alert">
-          <span>{firstIssue.line ? `Line ${firstIssue.line}: ` : ''}{firstIssue.message}</span>
-          {firstIssue.line > 0 && <button type="button" onClick={() => ref.current?.jumpToLine(firstIssue.line)}>Jump to line</button>}
+          <ul>{issues.map((message) => <li key={message}>{message}</li>)}</ul>
         </div>
       )}
-      {shownIssues.length > 1 && (
-        <ul className="errors">
-          {shownIssues.slice(1, 10).map((i, idx) => <li key={idx}>{i.line ? `Line ${i.line}: ` : ''}{i.message}</li>)}
-        </ul>
-      )}
 
-      <TomlEditor ref={ref} value={draft} onChange={(text) => { setDraft(text); setIssues([]); }} wrap={wrap} ariaLabel={`${fileName} editor`} />
+      <Card title="General">
+        <div className="settings-grid">
+          <label>Currency symbol
+            <input value={form.currencySymbol} maxLength={8} aria-invalid={!form.currencySymbol.trim()} onChange={(e) => update({ ...form, currencySymbol: e.target.value })} />
+          </label>
+          <label>Count totals up to day
+            <input type="number" min={0} max={31} step={1} value={form.totalMoneyAsOfDay} onChange={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 31) update({ ...form, totalMoneyAsOfDay: n }); }} />
+            <span className="muted small">0 counts the whole month.</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={form.roundAmounts} onChange={(e) => update({ ...form, roundAmounts: e.target.checked })} />
+            Round amounts to whole units
+          </label>
+        </div>
+      </Card>
 
-      <footer className="pane-foot">
-        <button type="button" className="primary" onClick={save} disabled={!dirty || !live.ok}>Save</button>
+      <Card title="Import formats">
+        <p className="muted small">Describe how bank CSV exports are read. Each format is matched when you import a file.</p>
+        {form.formats.length === 0 && <p className="muted">No formats yet.</p>}
+        {form.formats.map((format, index) => {
+          const delimiters = DELIMITERS.some((d) => d.value === format.delimiter) ? DELIMITERS : [...DELIMITERS, { value: format.delimiter, label: `Custom (${format.delimiter})` }];
+          return (
+            <section className="format-card" key={index} aria-label={`Format ${index + 1}`}>
+              <div className="settings-grid">
+                <label>Name
+                  <input value={format.name} aria-invalid={!format.name.trim()} onChange={(e) => patchFormat(index, { name: e.target.value })} />
+                </label>
+                <label>Date column
+                  <input value={format.dateColumn} aria-invalid={!format.dateColumn.trim()} onChange={(e) => patchFormat(index, { dateColumn: e.target.value })} />
+                </label>
+                <label>Amount column
+                  <input value={format.amountColumn} aria-invalid={!format.amountColumn.trim()} onChange={(e) => patchFormat(index, { amountColumn: e.target.value })} />
+                </label>
+                <label>Description column
+                  <input value={format.descriptionColumn ?? ''} onChange={(e) => patchFormat(index, { descriptionColumn: e.target.value || undefined })} />
+                </label>
+                <label>Reference column
+                  <input value={format.referenceColumn ?? ''} onChange={(e) => patchFormat(index, { referenceColumn: e.target.value || undefined })} />
+                </label>
+                <label>Date format
+                  <input value={format.dateFormat ?? ''} placeholder="%Y-%m-%d" onChange={(e) => patchFormat(index, { dateFormat: e.target.value || undefined })} />
+                </label>
+                <label>Delimiter
+                  <select value={format.delimiter} onChange={(e) => patchFormat(index, { delimiter: e.target.value })}>
+                    {delimiters.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                </label>
+                <label>Decimal separator
+                  <select value={format.decimalSeparator} onChange={(e) => patchFormat(index, { decimalSeparator: e.target.value })}>
+                    <option value=".">Period (.)</option>
+                    <option value=",">Comma (,)</option>
+                  </select>
+                </label>
+                <label>Thousands separator
+                  <select value={format.thousandsSeparator} onChange={(e) => patchFormat(index, { thousandsSeparator: e.target.value })}>
+                    {THOUSANDS.filter((t) => t.value !== format.decimalSeparator).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div className="settings-grid">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={format.balanceSnapshot !== undefined}
+                    onChange={(e) => patchFormat(index, e.target.checked
+                      ? { balanceSnapshot: 0, balanceSnapshotDate: todayIso(new Date()) }
+                      : { balanceSnapshot: undefined, balanceSnapshotDate: undefined })}
+                  />
+                  Set an opening balance from this export
+                </label>
+                {format.balanceSnapshot !== undefined && format.balanceSnapshotDate && (
+                  <>
+                    <label>Balance
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={centsToDecimal(format.balanceSnapshot)}
+                        onChange={(e) => {
+                          try {
+                            if (e.target.value !== '') patchFormat(index, { balanceSnapshot: numberToCents(Number(e.target.value)) });
+                          } catch {
+                            /* keep the last valid amount while typing */
+                          }
+                        }}
+                      />
+                    </label>
+                    <label>Balance date
+                      <input type="date" value={format.balanceSnapshotDate} onChange={(e) => { if (e.target.value) patchFormat(index, { balanceSnapshotDate: e.target.value as IsoDate }); }} />
+                    </label>
+                  </>
+                )}
+              </div>
+
+              <div className="format-actions">
+                <button type="button" onClick={() => removeFormat(index)}>Remove format</button>
+              </div>
+            </section>
+          );
+        })}
+        <div><button type="button" onClick={addFormat}>Add format</button></div>
+      </Card>
+
+      <footer className="settings-actions">
+        <button type="button" className="primary" onClick={save} disabled={!dirty || !valid}>Save</button>
         <button type="button" onClick={discard} disabled={!dirty}>Discard changes</button>
-        <span className="editor-stats">{draft.split('\n').length} {draft.split('\n').length === 1 ? 'line' : 'lines'} · {live.ok ? 'Valid' : 'Needs attention'}</span>
         {notice && <span className="muted" role="status">{notice}</span>}
       </footer>
-    </section>
+    </div>
   );
 }
 

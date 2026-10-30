@@ -70,7 +70,10 @@ export function UnlockScreen() {
 
   return (
     <main className="gate">
-      <h1>moonli Budget</h1>
+      <div className="gate-brand">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
+        <h1>moonli Budget</h1>
+      </div>
       <form onSubmit={submit} className="stack">
         <label>Password
           <input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus required />
