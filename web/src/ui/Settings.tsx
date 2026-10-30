@@ -7,7 +7,7 @@ import { centsToDecimal, numberToCents } from '../domain/money';
 import { currentMonth, todayIso, type IsoDate, type YearMonth } from '../domain/dates';
 import { envelopeCreatedAt } from '../crypto/envelope';
 import type { Snapshot } from '../domain/snapshot';
-import { Card, InfoButton, MonthSelect, dataMonths } from './common';
+import { Card, InfoButton, MonthSelect, PreviewNotice, dataMonths } from './common';
 
 const TABS = ['general', 'data'] as const;
 type Tab = (typeof TABS)[number];
@@ -17,6 +17,7 @@ const TAB_ITEMS = [
 ] as const satisfies readonly SectionItem<Tab>[];
 
 export function Settings() {
+  const { isSample } = useSession();
   const [tab, setTab] = useSectionParam<Tab>('tab', TABS, 'general');
   return (
     <div className="page settings-page">
@@ -24,6 +25,7 @@ export function Settings() {
         <h1>Settings</h1>
         <SectionTabs items={TAB_ITEMS} value={tab} onChange={setTab} label="Settings sections" />
       </header>
+      {tab === 'data' && <PreviewNotice isSample={isSample} />}
       {tab === 'general' && <SettingsForm />}
       {tab === 'data' && <DataTab />}
     </div>

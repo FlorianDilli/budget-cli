@@ -32,7 +32,7 @@ function parsed(text: string) {
   return result.value;
 }
 
-async function render(initialDraft: string | null = null) {
+async function render(initialDraft: string | null = null, isSample = false) {
   function Harness() {
     const [savedText, setSavedText] = useState(saved);
     const [draftText, setDraftText] = useState(initialDraft);
@@ -43,7 +43,7 @@ async function render(initialDraft: string | null = null) {
     });
     mocks.session = {
       snapshot: { financialsToml: savedText }, financials: parsed(savedText), settings: { currencySymbol: 'USD' },
-      drafts: { financials: draftText, settings: null }, isSample: false, setDraft, saveFinancials,
+      drafts: { financials: draftText, settings: null }, isSample, setDraft, saveFinancials,
     };
     return createElement(MemoryRouter, null, createElement('div', null, createElement(BudgetPage), createElement('output', { 'data-testid': 'shared' }, parsed(savedText).recurring[0]?.description)));
   }
@@ -101,6 +101,13 @@ describe('native budget studio', () => {
     expect(container.querySelector('[data-testid=shared]')?.textContent).toBe('Draft salary');
     expect(container.querySelector('[role=status]')?.textContent).toContain('Saved to encrypted storage.');
     expect(button('Save').disabled).toBe(true);
+  });
+
+  it('shows one preview status for sample budget data', async () => {
+    await render(null, true);
+    expect(container.querySelector('.studio-status')?.textContent).toContain('Preview data is being shown');
+    expect(container.querySelector('.sample-notice')).toBeNull();
+    expect(container.querySelectorAll('.studio-status')).toHaveLength(1);
   });
 
   it('shows the saved budget and disables save and source navigation for an invalid draft', async () => {

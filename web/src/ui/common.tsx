@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Financials, Settings } from '../domain/config';
 import type { Snapshot } from '../domain/snapshot';
 import { centsToDecimal, type Cents } from '../domain/money';
@@ -18,13 +18,47 @@ export function Card({ title, children, wide, info }: { title?: string; children
   );
 }
 
+export function PreviewNotice({ isSample }: { isSample: boolean }) {
+  return isSample ? <p className="sample-notice">Preview data is being shown. Save your budget or settings to keep your changes.</p> : null;
+}
+
 export function InfoButton({ label, text }: { label: string; text: string }) {
+  const details = useRef<HTMLDetailsElement>(null);
+  const summary = useRef<HTMLElement>(null);
+  const popup = useRef<HTMLParagraphElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!open || !summary.current || !popup.current) return;
+    const place = () => {
+      const anchor = summary.current?.getBoundingClientRect();
+      const panel = popup.current?.getBoundingClientRect();
+      if (!anchor || !panel) return;
+      const left = Math.max(12, Math.min(anchor.left + anchor.width / 2 - panel.width / 2, window.innerWidth - panel.width - 12));
+      let top = anchor.bottom + 6;
+      if (top + panel.height > window.innerHeight - 12) top = Math.max(12, anchor.top - panel.height - 6);
+      popup.current?.style.setProperty('--tip-left', `${left}px`);
+      popup.current?.style.setProperty('--tip-top', `${top}px`);
+    };
+    const closeOnScroll = () => {
+      if (details.current) details.current.open = false;
+      setOpen(false);
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', closeOnScroll, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', closeOnScroll, true);
+    };
+  }, [open]);
+
   return (
-    <details className="info-tip">
-      <summary aria-label={`More about ${label}`} title={`More about ${label}`}>
+    <details ref={details} className="info-tip" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary ref={summary} aria-label={`More about ${label}`} title={`More about ${label}`}>
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7v4M8 4.8h.01" /></svg>
       </summary>
-      <p>{text}</p>
+      <p ref={popup}>{text}</p>
     </details>
   );
 }

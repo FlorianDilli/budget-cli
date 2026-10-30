@@ -4,7 +4,7 @@ import { analyzeMonth } from '../domain/analysis';
 import { asOfForMonth, totalMoney } from '../domain/totals';
 import { currentMonth, monthLabel, monthOf } from '../domain/dates';
 import { sumCents, centsToDecimal, type Cents } from '../domain/money';
-import { Card, Money, currencyOf, dataMonths } from './common';
+import { Card, Money, PreviewNotice, currencyOf, dataMonths } from './common';
 
 interface Row {
   ym: string;
@@ -16,7 +16,7 @@ interface Row {
 }
 
 export function Insights() {
-  const { snapshot, settings, financials } = useSession();
+  const { snapshot, settings, financials, isSample } = useSession();
   const now = useMemo(() => new Date(), []);
   if (!snapshot) return null;
   const cur = currencyOf(settings);
@@ -41,6 +41,7 @@ export function Insights() {
   return (
     <div className="page">
       <header className="page-head"><h1>Insights</h1></header>
+      <PreviewNotice isSample={isSample} />
 
       <Card title="Total money over time" wide>
         <TotalChart rows={rows.filter((r) => r.total !== 0 || r.hasData)} currency={cur} />

@@ -2,7 +2,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import { useSession, type ImportPreview } from '../state/session';
 import { analyzeMonth, type TxAnalysis } from '../domain/analysis';
 import { currentMonth, type YearMonth } from '../domain/dates';
-import { Card, Money, MonthSelect, currencyOf, dataMonths } from './common';
+import { Card, Money, MonthSelect, PreviewNotice, currencyOf, dataMonths } from './common';
 import { centsToDecimal } from '../domain/money';
 import { readCsv } from '../domain/csv';
 import type { ImportFormat } from '../domain/config';
@@ -14,7 +14,7 @@ const FLAG_LABEL: Record<string, string> = {
 };
 
 export function Transactions() {
-  const { snapshot, settings, financials, previewImport, commitImport } = useSession();
+  const { snapshot, settings, financials, isSample, previewImport, commitImport } = useSession();
   const now = useMemo(() => new Date(), []);
   const months = useMemo(() => (snapshot ? dataMonths(snapshot, financials, now) : []), [snapshot, financials, now]);
   const [ym, setYm] = useState<YearMonth>(() => currentMonth(now));
@@ -30,6 +30,7 @@ export function Transactions() {
         <h1>Transactions</h1>
         <MonthSelect months={months} value={ym} onChange={(m) => { setYm(m); setSelected(null); }} label="Month" />
       </header>
+      <PreviewNotice isSample={isSample} />
 
       <ImportPanel
         formats={settings.formats}

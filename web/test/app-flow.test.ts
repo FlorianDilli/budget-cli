@@ -136,8 +136,10 @@ describe('app security and navigation flow', () => {
     await click(settingsLink);
     expect(container.querySelectorAll('.sample-notice')).toHaveLength(1);
     expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview settings are shown');
+    expect(container.querySelector('h1')?.compareDocumentPosition(container.querySelector('.sample-notice')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await click(button('Data'));
     expect(container.textContent).not.toContain('Currency: EUR');
     expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview data is being shown');
+    expect(container.querySelector('h1')?.compareDocumentPosition(container.querySelector('.sample-notice')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 15000);
 });

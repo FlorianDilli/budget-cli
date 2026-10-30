@@ -3,10 +3,10 @@ import { useSession } from '../state/session';
 import { analyzeMonth, topSpending } from '../domain/analysis';
 import { asOfForMonth, totalMoney } from '../domain/totals';
 import { currentMonth, type YearMonth } from '../domain/dates';
-import { Card, Money, MonthSelect, currencyOf, dataMonths } from './common';
+import { Card, Money, MonthSelect, PreviewNotice, currencyOf, dataMonths } from './common';
 
 export function Overview() {
-  const { snapshot, settings, financials } = useSession();
+  const { snapshot, settings, financials, isSample } = useSession();
   const now = useMemo(() => new Date(), []);
   const months = useMemo(() => (snapshot ? dataMonths(snapshot, financials, now) : []), [snapshot, financials, now]);
   const [ym, setYm] = useState<YearMonth>(() => currentMonth(now));
@@ -24,6 +24,7 @@ export function Overview() {
         <h1>Overview</h1>
         <MonthSelect months={months} value={ym} onChange={setYm} label="Month" />
       </header>
+      <PreviewNotice isSample={isSample} />
 
       {empty && <p className="hint">No data yet. Add recurring entries in Settings and import a CSV in Transactions.</p>}
 

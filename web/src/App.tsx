@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import { NavLink, Route, Routes, Navigate } from 'react-router-dom';
 import { SessionProvider, useSession } from './state/session';
 import { SetupScreen, UnlockScreen } from './ui/Gate';
 import { Overview } from './ui/Overview';
@@ -32,9 +32,7 @@ const NAV = [
 ];
 
 function Shell() {
-  const { lock, error, setError, isSample } = useSession();
-  const location = useLocation();
-  const isSettingsGeneral = location.pathname === '/settings' && new URLSearchParams(location.search).get('tab') !== 'data';
+  const { lock, error, setError } = useSession();
   return (
     <div className="shell">
       <header className="topbar">
@@ -53,7 +51,6 @@ function Shell() {
         ))}
       </nav>
       <main className="content">
-        {isSample && !isSettingsGeneral && <p className="sample-notice">Preview data is being shown. Save your budget or settings to keep your changes.</p>}
         {error && (
           <p className="error" role="alert">
             {error} <button onClick={() => setError(null)}>Dismiss</button>

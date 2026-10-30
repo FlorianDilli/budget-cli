@@ -370,6 +370,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 
 /* Settings form: visual replacement for settings.toml. */
 .settings-page { font-size: 0.9rem; }
+.settings-page > .grid-2 { font-size: 1rem; }
 .settings-form { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 .settings-form .error-banner ul { margin: 0; padding-left: 1.1rem; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem 1rem; align-items: end; }
@@ -384,7 +385,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .info-tip summary::-webkit-details-marker { display: none; }
 .info-tip summary svg { display: block; width: .9rem; height: .9rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .info-tip summary:hover, .info-tip[open] summary { color: var(--text); }
-.info-tip p { position: absolute; z-index: 5; top: calc(100% + .35rem); left: 0; width: min(16rem, 80vw); margin: 0; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); font-size: .78rem; font-weight: 400; line-height: 1.4; }
+.info-tip p { position: fixed; z-index: 5; top: var(--tip-top, 12px); left: var(--tip-left, 12px); width: min(16rem, calc(100vw - 24px)); margin: 0; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); font-size: .78rem; font-weight: 400; line-height: 1.4; }
 .settings-grid input[aria-invalid='true'] { border-color: var(--err); }
 .format-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.9rem; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
 .format-actions { display: flex; justify-content: flex-end; }
