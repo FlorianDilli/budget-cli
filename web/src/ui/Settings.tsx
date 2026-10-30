@@ -122,7 +122,7 @@ function SettingsForm() {
 
   return (
     <div className="settings-form">
-      {isSample && <p className="warn">Sample settings are shown. Save to keep them.</p>}
+      {isSample && <p className="sample-notice">Preview settings are shown. Save to keep your changes.</p>}
       {!stored.ok && !isSample && <p className="warn">The saved settings could not be read ({stored.issues[0]?.message}). Showing defaults until you save.</p>}
       {issues.length > 0 && (
         <div className="error-banner" role="alert">

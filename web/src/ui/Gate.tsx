@@ -8,11 +8,15 @@ function errorText(e: unknown): string {
 }
 
 export function SetupScreen() {
-  const { setup } = useSession();
+  const { setup, importBackup } = useSession();
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [backup, setBackup] = useState<File | null>(null);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -28,22 +32,57 @@ export function SetupScreen() {
     }
   };
 
+  const submitImport = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!backup) return;
+    setBackupError(null);
+    setImporting(true);
+    try {
+      await importBackup(await backup.text(), backupPassword);
+    } catch (err) {
+      setBackupError(errorText(err));
+    } finally {
+      setImporting(false);
+      setBackupPassword('');
+    }
+  };
+
   return (
-    <main className="gate">
-      <h1>Set up moonli Budget</h1>
-      <p className="warn">
-        Your data is encrypted with this password and stays in this browser. There is no recovery: a forgotten password makes the data unreadable.
-      </p>
-      <form onSubmit={submit} className="stack">
-        <label>Password (at least {MIN_PASSWORD_LENGTH} characters)
-          <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
-        </label>
-        <label>Confirm password
-          <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-        </label>
-        {error && <p className="error" role="alert">{error}</p>}
-        <button type="submit" className="primary" disabled={busy}>{busy ? 'Encrypting…' : 'Create encrypted store'}</button>
-      </form>
+    <main className="gate gate-setup">
+      <div className="gate-brand">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
+        <h1>moonli Budget</h1>
+      </div>
+      <div className="setup-options">
+        <section className="card setup-option">
+          <h2>Set up a new budget</h2>
+          <p className="muted small">Your data stays encrypted in this browser. There is no recovery if you forget your password.</p>
+          <form onSubmit={submit} className="stack">
+            <label>Password (at least {MIN_PASSWORD_LENGTH} characters)
+              <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
+            </label>
+            <label>Confirm password
+              <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+            </label>
+            {error && <p className="error" role="alert">{error}</p>}
+            <button type="submit" className="primary" disabled={busy}>{busy ? 'Encrypting…' : 'Create encrypted store'}</button>
+          </form>
+        </section>
+        <section className="card setup-option">
+          <h2>Restore a .budget file</h2>
+          <p className="muted small">Import an encrypted backup. Its password will protect the copy saved in this browser.</p>
+          <form onSubmit={submitImport} className="stack">
+            <label>Backup file
+              <input type="file" accept=".budget,application/json" onChange={(e) => setBackup(e.target.files?.[0] ?? null)} />
+            </label>
+            <label>Backup password
+              <input type="password" autoComplete="current-password" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required />
+            </label>
+            {backupError && <p className="error" role="alert">{backupError}</p>}
+            <button type="submit" disabled={!backup || importing}>{importing ? 'Restoring…' : 'Restore budget'}</button>
+          </form>
+        </section>
+      </div>
     </main>
   );
 }

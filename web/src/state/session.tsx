@@ -38,6 +38,7 @@ interface SessionValue {
   error: string | null;
   setError: (e: string | null) => void;
   setup: (password: string) => Promise<void>;
+  importBackup: (text: string, password: string) => Promise<void>;
   unlock: (password: string) => Promise<void>;
   lock: () => void;
   saveSettings: (text: string) => Promise<SaveResult>;
@@ -259,6 +260,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return snap;
   }, []);
 
+  const importBackup = useCallback(async (text: string, password: string) => {
+    const snap = await readBackup(text, password);
+    await persist(() => ({ ...snap, savedAt: nowIso() }), password);
+    passwordRef.current = password;
+    setDrafts({ settings: null, financials: null });
+    setStatus('unlocked');
+    setError(null);
+  }, [persist, readBackup]);
+
   const restoreBackup = useCallback(async (snap: Snapshot) => {
     const issues = validSnapshotToml(snap);
     if (issues.length) throw new Error(issues[0].message);
@@ -280,6 +290,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     error,
     setError,
     setup,
+    importBackup,
     unlock,
     lock,
     saveSettings,

@@ -7,6 +7,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { deleteVault, readVault } from '../src/storage/vault';
+import { sealEnvelope, openEnvelope } from '../src/crypto/envelope';
+import { emptySnapshot } from '../src/domain/snapshot';
+import { SAMPLE_FINANCIALS, SAMPLE_SETTINGS } from '../src/domain/sample';
 
 Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -57,9 +60,39 @@ afterEach(async () => {
 });
 
 describe('app security and navigation flow', () => {
+  it('restores an encrypted .budget backup during first-time setup', async () => {
+    const backupPassword = 'backup password';
+    const backupSnapshot = {
+      ...emptySnapshot('2026-10-30T12:00:00.000Z'),
+      settingsToml: SAMPLE_SETTINGS,
+      financialsToml: SAMPLE_FINANCIALS,
+    };
+    const backupText = await sealEnvelope(JSON.stringify(backupSnapshot), backupPassword, backupSnapshot.savedAt);
+
+    await renderApp();
+    await waitFor(() => container.querySelector('input[type=file]') !== null);
+    const fileInput = container.querySelector<HTMLInputElement>('input[type=file]')!;
+    const backupFile = new File([backupText], 'backup.budget', { type: 'application/json' });
+    Object.defineProperty(backupFile, 'text', { value: async () => backupText });
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [backupFile] });
+    await act(async () => fileInput.dispatchEvent(new Event('input', { bubbles: true })));
+    await act(async () => fileInput.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(button('Restore budget').disabled).toBe(false);
+    await fill(container.querySelector<HTMLInputElement>('input[autocomplete=current-password]')!, backupPassword);
+    await click(button('Restore budget'));
+
+    await waitFor(() => container.querySelector('nav[aria-label=Main]') !== null);
+    const stored = await readVault();
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(await openEnvelope(stored!, backupPassword))).toMatchObject({
+      settingsToml: SAMPLE_SETTINGS,
+      financialsToml: SAMPLE_FINANCIALS,
+    });
+  }, 20000);
+
   it('validates setup, persists an encrypted vault, and requires the correct password after locking and reload', async () => {
     await renderApp();
-    await waitFor(() => container.textContent?.includes('Set up moonli Budget') === true);
+    await waitFor(() => container.textContent?.includes('Set up a new budget') === true);
     const inputs = container.querySelectorAll<HTMLInputElement>('input[type=password]');
     await fill(inputs[0], 'correct password');
     await fill(inputs[1], 'different password');
@@ -103,6 +136,6 @@ describe('app security and navigation flow', () => {
     await fill(container.querySelector<HTMLInputElement>('input[type=password]')!, 'correct password');
     await click(button('Unlock'));
     await waitFor(() => container.querySelector('nav[aria-label=Main]') !== null);
-    expect(container.textContent).toContain('Sample data');
+    expect(container.textContent).toContain('Preview data is being shown');
   }, 15000);
 });
