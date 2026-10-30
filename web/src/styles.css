@@ -103,7 +103,7 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .sample-notice { margin: 0; padding: .4rem .65rem; border-left: 2px solid var(--accent); color: var(--muted); font-size: .78rem; }
 
 .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr; }
-.topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+.topbar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; }
 .lock { font-size: 0.85rem; }
 .nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); z-index: 2; }
@@ -156,7 +156,7 @@ tbody tr { cursor: default; }
 .toolbar .sym { font-family: var(--mono); padding: 0.2rem 0.45rem; font-size: 0.85rem; }
 .toml-editor { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; min-height: 320px; background: var(--surface); }
 .toml-editor .cm-editor { min-height: 320px; max-height: 70vh; font-family: var(--mono); font-size: 13px; }
-.toml-editor .cm-scroller { overflow: auto; }
+.toml-editor .cm-scroller { overflow: auto; overscroll-behavior: contain; }
 .toml-editor .cm-editor.cm-focused { outline: none; }
 /* Section tabs: the only sub-navigation control. See docs/navigation.md. */
 .section-tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); max-width: 100%; overflow-x: auto; }

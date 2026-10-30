@@ -51,7 +51,7 @@ async function render(initialDraft: string | null = null, isSample = false) {
 }
 
 function button(text: string) {
-  const result = Array.from(container.querySelectorAll('button')).find((element) => element.textContent?.trim() === text);
+  const result = Array.from(container.querySelectorAll('button')).find((element) => element.textContent?.trim() === text || element.getAttribute('aria-label') === text);
   if (!result) throw new Error(`Button not found: ${text}`);
   return result;
 }
@@ -105,9 +105,11 @@ describe('native budget studio', () => {
 
   it('shows one preview status for sample budget data', async () => {
     await render(null, true);
-    expect(container.querySelector('.studio-status')?.textContent).toContain('Preview data is being shown');
-    expect(container.querySelector('.sample-notice')).toBeNull();
+    expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview data is being shown. Save your budget or settings to keep your changes.');
+    expect(container.querySelector('.studio-status')?.textContent).toContain('Unsaved preview');
     expect(container.querySelectorAll('.studio-status')).toHaveLength(1);
+    expect(container.querySelectorAll('.studio-actions .icon-button')).toHaveLength(2);
+    expect(container.querySelector('.studio-footer .icon-button')?.getAttribute('aria-label')).toBe('Save');
   });
 
   it('shows the saved budget and disables save and source navigation for an invalid draft', async () => {
