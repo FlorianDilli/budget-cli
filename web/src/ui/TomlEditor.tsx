@@ -12,7 +12,6 @@ export interface TomlEditorHandle {
   undo: () => void;
   redo: () => void;
   search: () => void;
-  insert: (text: string) => void;
 }
 
 interface Props {
@@ -55,7 +54,7 @@ export const TomlEditor = forwardRef<TomlEditorHandle, Props>(function TomlEdito
           highlightSpecialChars(),
           drawSelection(),
           history(),
-          search({ top: true }),
+          search({ top: true, caseSensitive: false, literal: true, regexp: false, wholeWord: false }),
           bracketMatching(),
           tomlLang,
           syntaxHighlighting(tomlHighlight),
@@ -105,13 +104,6 @@ export const TomlEditor = forwardRef<TomlEditorHandle, Props>(function TomlEdito
     },
     search() {
       if (view.current) openSearchPanel(view.current);
-    },
-    insert(text: string) {
-      const v = view.current;
-      if (!v) return;
-      const pos = v.state.selection.main;
-      v.dispatch({ changes: { from: pos.from, to: pos.to, insert: text }, selection: { anchor: pos.from + text.length } });
-      v.focus();
     },
   }), []);
 

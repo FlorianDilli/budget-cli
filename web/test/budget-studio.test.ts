@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { parseFinancials } from '../src/domain/config';
 
-const mocks = vi.hoisted(() => ({ session: {} as Record<string, unknown>, jump: vi.fn(), insert: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: {} as Record<string, unknown>, jump: vi.fn() }));
 vi.mock('../src/state/session', () => ({ useSession: () => mocks.session }));
 vi.mock('../src/ui/TomlEditor', () => ({
   TomlEditor: forwardRef(function MockEditor(props: { value: string; onChange: (value: string) => void; ariaLabel: string }, ref) {
-    useImperativeHandle(ref, () => ({ jumpToLine: mocks.jump, insert: mocks.insert, undo: vi.fn(), redo: vi.fn(), search: vi.fn() }));
+    useImperativeHandle(ref, () => ({ jumpToLine: mocks.jump, undo: vi.fn(), redo: vi.fn(), search: vi.fn() }));
     return createElement('textarea', { value: props.value, 'aria-label': props.ariaLabel, onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => props.onChange(event.target.value) });
   }),
 }));
@@ -76,7 +76,6 @@ beforeEach(() => {
   saveFinancials = vi.fn();
   setDraft = vi.fn();
   mocks.jump.mockReset();
-  mocks.insert.mockReset();
 });
 
 afterEach(async () => {
@@ -109,7 +108,9 @@ describe('native budget studio', () => {
     expect(container.querySelector('.sample-notice')?.textContent).toContain('Preview data is being shown. Save your budget or settings to keep your changes.');
     expect(container.querySelector('.studio-status')).toBeNull();
     expect(container.textContent).not.toContain('Unsaved preview');
-    expect(container.querySelectorAll('.studio-actions .icon-button')).toHaveLength(2);
+    expect(container.querySelector('[aria-label="Open TOML file"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Download TOML file"]')).toBeNull();
+    expect(container.querySelector('.studio-editor-actions')?.textContent).toBe('ClearCopyUndoRedoSearchWrap');
     expect(container.querySelector('.studio-footer .primary')?.textContent).toBe('Save');
   });
 
@@ -135,8 +136,6 @@ describe('native budget studio', () => {
     expect(container.querySelector<HTMLElement>('.studio-editor')?.hidden).toBe(false);
     expect(container.querySelector<HTMLElement>('.studio-inspector')?.hidden).toBe(true);
     expect(mocks.jump).toHaveBeenCalledWith(2);
-    await click(button('Tab'));
-    expect(mocks.insert).toHaveBeenCalledWith('\t');
     await click(button('Discard changes'));
     expect(setDraft).toHaveBeenLastCalledWith('financials', saved);
     expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(saved);
