@@ -78,6 +78,7 @@ describe('app security and navigation flow', () => {
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [backupFile] });
     await act(async () => fileInput.dispatchEvent(new Event('input', { bubbles: true })));
     await act(async () => fileInput.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(container.querySelector('.file-picker-name')?.textContent).toBe('backup.budget');
     expect(button('Import budget').disabled).toBe(false);
     await fill(container.querySelector<HTMLInputElement>('input[autocomplete=current-password]')!, backupPassword);
     await click(button('Import budget'));

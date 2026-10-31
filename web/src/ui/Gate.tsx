@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useSession } from '../state/session';
 import { CryptoError } from '../crypto/envelope';
 
@@ -17,6 +17,7 @@ export function SetupScreen() {
   const [backupPassword, setBackupPassword] = useState('');
   const [backupError, setBackupError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,7 +52,7 @@ export function SetupScreen() {
     <main className="gate gate-setup">
       <div className="gate-brand">
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
-        <h1>Plan Your Budget</h1>
+        <h1>Budget Tracker</h1>
       </div>
       <div className="setup-options">
         <section className="card setup-option">
@@ -72,9 +73,15 @@ export function SetupScreen() {
           <h2>Import a .budget file</h2>
           <p className="muted small">Bring an encrypted budget into this browser. The file password unlocks it, then protects the local copy.</p>
           <form onSubmit={submitImport} className="stack">
-            <label className="file-picker">Budget file
-              <input type="file" accept=".budget,application/json" aria-label="Choose .budget file" onChange={(e) => setBackup(e.target.files?.[0] ?? null)} />
-            </label>
+            <div className="file-picker">
+              <span className="file-picker-label">Budget file</span>
+              <input ref={fileInput} className="file-picker-input" type="file" accept=".budget,application/json" tabIndex={-1} aria-hidden="true" onChange={(e) => setBackup(e.target.files?.[0] ?? null)} />
+              <button type="button" className="file-picker-button" onClick={() => fileInput.current?.click()}>Choose a .budget file</button>
+              <div className="file-picker-selection" aria-live="polite">
+                <span className="file-picker-name">{backup?.name ?? 'No file selected'}</span>
+                {backup && <button type="button" className="file-picker-clear" onClick={() => { setBackup(null); if (fileInput.current) fileInput.current.value = ''; }}>Remove</button>}
+              </div>
+            </div>
             <label>File password
               <input type="password" autoComplete="current-password" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required />
             </label>
@@ -111,7 +118,7 @@ export function UnlockScreen() {
     <main className="gate">
       <div className="gate-brand">
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
-        <h1>Plan Your Budget</h1>
+        <h1>Budget Tracker</h1>
       </div>
       <form onSubmit={submit} className="stack">
         <label>Password

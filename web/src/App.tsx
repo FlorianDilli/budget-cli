@@ -38,7 +38,7 @@ function Shell() {
       <header className="topbar">
         <div className="brand">
           <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={28} height={28} />
-          <span>Plan Your Budget</span>
+          <span>Budget Tracker</span>
         </div>
         <button onClick={lock} className="lock">Lock</button>
       </header>

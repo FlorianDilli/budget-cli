@@ -1,6 +1,6 @@
 {
-  "name": "Plan Your Budget",
-  "short_name": "Budget",
+  "name": "Budget Tracker",
+  "short_name": "Budget Tracker",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
