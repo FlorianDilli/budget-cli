@@ -51,7 +51,7 @@ export function SetupScreen() {
     <main className="gate gate-setup">
       <div className="gate-brand">
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
-        <h1>moonli Budget</h1>
+        <h1>Plan Your Budget</h1>
       </div>
       <div className="setup-options">
         <section className="card setup-option">
@@ -68,18 +68,18 @@ export function SetupScreen() {
             <button type="submit" className="primary" disabled={busy}>{busy ? 'Encrypting…' : 'Create encrypted store'}</button>
           </form>
         </section>
-        <section className="card setup-option">
-          <h2>Restore a .budget file</h2>
-          <p className="muted small">Import an encrypted backup. Its password will protect the copy saved in this browser.</p>
+        <section className="card setup-option setup-import-option">
+          <h2>Import a .budget file</h2>
+          <p className="muted small">Bring an encrypted budget into this browser. The file password unlocks it, then protects the local copy.</p>
           <form onSubmit={submitImport} className="stack">
-            <label>Backup file
-              <input type="file" accept=".budget,application/json" onChange={(e) => setBackup(e.target.files?.[0] ?? null)} />
+            <label className="file-picker">Budget file
+              <input type="file" accept=".budget,application/json" aria-label="Choose .budget file" onChange={(e) => setBackup(e.target.files?.[0] ?? null)} />
             </label>
-            <label>Backup password
+            <label>File password
               <input type="password" autoComplete="current-password" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} required />
             </label>
             {backupError && <p className="error" role="alert">{backupError}</p>}
-            <button type="submit" disabled={!backup || importing}>{importing ? 'Restoring…' : 'Restore budget'}</button>
+            <button type="submit" className="primary import-submit" disabled={!backup || importing}>{importing ? 'Importing…' : 'Import budget'}</button>
           </form>
         </section>
       </div>
@@ -111,7 +111,7 @@ export function UnlockScreen() {
     <main className="gate">
       <div className="gate-brand">
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={112} height={112} className="gate-logo" />
-        <h1>moonli Budget</h1>
+        <h1>Plan Your Budget</h1>
       </div>
       <form onSubmit={submit} className="stack">
         <label>Password

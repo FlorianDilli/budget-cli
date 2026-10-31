@@ -60,7 +60,7 @@ afterEach(async () => {
 });
 
 describe('app security and navigation flow', () => {
-  it('restores an encrypted .budget backup during first-time setup', async () => {
+  it('imports an encrypted .budget file during first-time setup', async () => {
     const backupPassword = 'backup password';
     const backupSnapshot = {
       ...emptySnapshot('2026-10-30T12:00:00.000Z'),
@@ -71,15 +71,16 @@ describe('app security and navigation flow', () => {
 
     await renderApp();
     await waitFor(() => container.querySelector('input[type=file]') !== null);
+    expect(container.textContent).toContain('Import a .budget file');
     const fileInput = container.querySelector<HTMLInputElement>('input[type=file]')!;
     const backupFile = new File([backupText], 'backup.budget', { type: 'application/json' });
     Object.defineProperty(backupFile, 'text', { value: async () => backupText });
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [backupFile] });
     await act(async () => fileInput.dispatchEvent(new Event('input', { bubbles: true })));
     await act(async () => fileInput.dispatchEvent(new Event('change', { bubbles: true })));
-    expect(button('Restore budget').disabled).toBe(false);
+    expect(button('Import budget').disabled).toBe(false);
     await fill(container.querySelector<HTMLInputElement>('input[autocomplete=current-password]')!, backupPassword);
-    await click(button('Restore budget'));
+    await click(button('Import budget'));
 
     await waitFor(() => container.querySelector('nav[aria-label=Main]') !== null);
     const stored = await readVault();

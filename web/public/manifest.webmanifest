@@ -1,6 +1,6 @@
 {
-  "name": "moonli Budget",
-  "short_name": "moonli",
+  "name": "Plan Your Budget",
+  "short_name": "Budget",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
